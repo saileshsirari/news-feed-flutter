@@ -1,19 +1,23 @@
 import 'package:flutter/foundation.dart';
+import '../config/app_config.dart';
+import '../data/services/api_service.dart';
+import '../data/services/app_socket.dart';
+import '../data/services/cursor_codec.dart';
 import '../models/models.dart';
-import '../network/api_client.dart';
-import '../network/app_socket.dart';
-import '../network/cursor_codec.dart';
 import '../session/user_session.dart';
 
 /// Mirrors news-feed-android's FeedViewModel.kt: ChangeNotifier is Flutter's
 /// closest equivalent to Kotlin's StateFlow-backed ViewModel for something
 /// this simple (see pubspec.yaml's note on Provider vs. Riverpod/Bloc).
 class FeedViewModel extends ChangeNotifier {
-  final ApiClient _api;
+  final ApiService _api;
   final UserSession _session;
+  // Only needed to open the socket; goes away once the socket moves out of
+  // this view model (next refactoring step).
+  final AppConfig _config;
   AppSocket? _socket;
 
-  FeedViewModel(this._api, this._session) {
+  FeedViewModel(this._api, this._session, this._config) {
     _init();
   }
 
@@ -64,7 +68,7 @@ class FeedViewModel extends ChangeNotifier {
 
   void _connectRealtime(int userId) {
     _socket?.disconnect();
-    _socket = AppSocket(userId)..connect();
+    _socket = AppSocket(userId, _config)..connect();
     _socket!.events.listen((event) {
       if (event['type'] == 'feed_updated') _checkForNewPosts();
     });

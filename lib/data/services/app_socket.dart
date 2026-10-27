@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:web_socket_channel/web_socket_channel.dart';
-import 'api_client.dart';
+import '../../config/app_config.dart';
 
 /// One persistent connection carrying every realtime event this app cares
 /// about — feed_updated (from FeedSocket.kt's original job), plus
@@ -13,22 +13,19 @@ import 'api_client.dart';
 /// stream; each screen's view model filters for the "type" it cares about.
 class AppSocket {
   final int userId;
+  final AppConfig _config;
   WebSocketChannel? _channel;
   final _controller = StreamController<Map<String, dynamic>>.broadcast();
 
-  AppSocket(this.userId);
+  AppSocket(this.userId, this._config);
 
   Stream<Map<String, dynamic>> get events => _controller.stream;
 
   void connect() {
-    // Derived from ApiClient.baseUrl instead of a second hardcoded host —
-    // the whole reason "can't log in on a real phone" happened was 10.0.2.2
-    // living in two separate places and only one getting updated. The
-    // ws/wss choice has to track http/https: the VM's backend sits behind
-    // Caddy's TLS termination, so a plain ws:// there fails outright.
-    final httpUri = Uri.parse('${ApiClient.baseUrl}/ws?userId=$userId');
-    final uri = httpUri.replace(scheme: httpUri.scheme == 'https' ? 'wss' : 'ws');
-    _channel = WebSocketChannel.connect(uri);
+    // Same host as the REST API, from the one AppConfig — the whole reason
+    // "can't log in on a real phone" happened was the address living in two
+    // places and only one getting updated.
+    _channel = WebSocketChannel.connect(_config.webSocketUri(userId: userId));
     _channel!.stream.listen(
       (raw) {
         try {

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/models.dart';
-import '../network/api_client.dart';
+import '../data/services/api_service.dart';
 import 'contacts_view_model.dart';
 import 'conversation_screen.dart';
 
@@ -15,7 +15,7 @@ class ContactsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ChangeNotifierProvider(
-      create: (_) => ContactsViewModel(context.read<ApiClient>(), currentUserId),
+      create: (_) => ContactsViewModel(context.read<ApiService>(), currentUserId),
       child: const _ContactsView(),
     );
   }

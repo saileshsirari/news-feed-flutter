@@ -1,8 +1,8 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import '../models/models.dart';
-import '../network/api_client.dart';
-import '../network/app_socket.dart';
+import '../data/services/api_service.dart';
+import '../data/services/app_socket.dart';
 
 /// A single conversation's message thread — history via GET
 /// /conversations/:id/messages, live delivery via the shared AppSocket's
@@ -10,7 +10,7 @@ import '../network/app_socket.dart';
 /// push). Marks read whenever the newest message changes, same "opened it,
 /// so mark read" trigger a real app would use.
 class ConversationViewModel extends ChangeNotifier {
-  final ApiClient _api;
+  final ApiService _api;
   final int conversationId;
   final int currentUserId;
   final AppSocket? _socket;

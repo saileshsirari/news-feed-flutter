@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../feed/feed_view_model.dart';
 import '../models/models.dart';
-import '../network/api_client.dart';
+import '../data/services/api_service.dart';
 import 'contacts_screen.dart';
 import 'conversations_view_model.dart';
 import 'conversation_screen.dart';
@@ -19,7 +19,7 @@ class ConversationsListScreen extends StatelessWidget {
     final feedVm = context.read<FeedViewModel>();
     return ChangeNotifierProvider(
       create: (_) => ConversationsViewModel(
-        context.read<ApiClient>(),
+        context.read<ApiService>(),
         currentUserId: feedVm.currentUserId!,
         socket: feedVm.socket,
       ),

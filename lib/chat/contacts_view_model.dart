@@ -1,6 +1,6 @@
 import 'package:flutter/foundation.dart';
 import '../models/models.dart';
-import '../network/api_client.dart';
+import '../data/services/api_service.dart';
 
 /// The "everyone you can message" list — every user is a valid chat target
 /// here, celebrity or not (unlike the feed, which is follow-scoped). Tapping
@@ -9,7 +9,7 @@ import '../network/api_client.dart';
 /// turns the same list into a multi-pick for group creation instead of a
 /// separate screen — same list either way, matching how it was asked for.
 class ContactsViewModel extends ChangeNotifier {
-  final ApiClient _api;
+  final ApiService _api;
   final int _currentUserId;
 
   ContactsViewModel(this._api, this._currentUserId) {

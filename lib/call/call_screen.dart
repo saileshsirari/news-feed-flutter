@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:livekit_client/livekit_client.dart';
 import 'package:provider/provider.dart';
 import '../feed/feed_view_model.dart';
-import '../network/api_client.dart';
+import '../data/services/api_service.dart';
 import 'call_view_model.dart';
 
 /// A group call for one conversation — LiveKit room name == "conversation-
@@ -19,7 +19,7 @@ class CallScreen extends StatelessWidget {
     final feedVm = context.read<FeedViewModel>();
     return ChangeNotifierProvider(
       create: (_) => CallViewModel(
-        context.read<ApiClient>(),
+        context.read<ApiService>(),
         conversationId: conversationId,
         currentUserId: feedVm.currentUserId!,
       ),

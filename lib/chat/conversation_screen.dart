@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../call/call_screen.dart';
 import '../feed/feed_view_model.dart';
-import '../network/api_client.dart';
+import '../data/services/api_service.dart';
 import '../models/models.dart';
 import 'conversation_view_model.dart';
 
@@ -17,7 +17,7 @@ class ConversationScreen extends StatelessWidget {
     final feedVm = context.read<FeedViewModel>();
     return ChangeNotifierProvider(
       create: (_) => ConversationViewModel(
-        context.read<ApiClient>(),
+        context.read<ApiService>(),
         conversationId: conversationId,
         currentUserId: feedVm.currentUserId!,
         socket: feedVm.socket,

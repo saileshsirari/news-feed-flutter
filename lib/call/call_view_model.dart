@@ -1,7 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:livekit_client/livekit_client.dart';
 import 'package:permission_handler/permission_handler.dart';
-import '../network/api_client.dart';
+import '../data/services/api_service.dart';
 
 /// One group call — a thin wrapper around a LiveKit [Room], not a chat-style
 /// view model with its own state machine. [Room] is already a ChangeNotifier
@@ -10,7 +10,7 @@ import '../network/api_client.dart';
 /// Room's own notifications: the UI watches CallViewModel and reads
 /// `room.localParticipant` / `room.remoteParticipants` directly off it.
 class CallViewModel extends ChangeNotifier {
-  final ApiClient _api;
+  final ApiService _api;
   final int conversationId;
   final int currentUserId;
 

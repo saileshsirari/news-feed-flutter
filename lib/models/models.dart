@@ -182,7 +182,7 @@ class ReadState {
 
 /// GET /conversations/:id/call-token's response — everything the Flutter
 /// client needs to join this conversation's LiveKit room: a scoped JWT, the
-/// LiveKit server's own url (a separate service from ApiClient.baseUrl, so
+/// LiveKit server's own url (a separate service from AppConfig.apiBaseUrl, so
 /// the backend hands it back rather than the client guessing it), and the
 /// room name (== "conversation-<id>", but the client shouldn't hardcode that
 /// convention — see chatService.createCallToken).

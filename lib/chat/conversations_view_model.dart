@@ -1,8 +1,8 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import '../models/models.dart';
-import '../network/api_client.dart';
-import '../network/app_socket.dart';
+import '../data/services/api_service.dart';
+import '../data/services/app_socket.dart';
 
 /// The "Chat" tab's primary view: conversations you're already in, most
 /// recently active first (server-sorted) — as opposed to contacts_view_model,
@@ -20,7 +20,7 @@ import '../network/app_socket.dart';
 /// read-marking never arrive here as a push — conversations_list_screen.dart
 /// covers that by reloading when you pop back from a conversation instead.
 class ConversationsViewModel extends ChangeNotifier {
-  final ApiClient _api;
+  final ApiService _api;
   final int currentUserId;
   final AppSocket? _socket;
   StreamSubscription<Map<String, dynamic>>? _socketSub;
