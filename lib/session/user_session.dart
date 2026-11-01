@@ -13,6 +13,15 @@ class CurrentUser {
   final int followerCount;
 
   CurrentUser({required this.id, required this.username, required this.followerCount});
+
+  // Value equality: CurrentUser is the key of feedViewModelProvider's family,
+  // and two reads of the same saved session must find the same view model.
+  @override
+  bool operator ==(Object other) =>
+      other is CurrentUser && other.id == id && other.username == username && other.followerCount == followerCount;
+
+  @override
+  int get hashCode => Object.hash(id, username, followerCount);
 }
 
 class UserSession {

@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:provider/provider.dart';
-import '../feed/feed_view_model.dart';
 import '../models/models.dart';
-import '../data/services/api_service.dart';
+import '../data/services/service_providers.dart';
+import '../data/services/socket_provider.dart';
+import '../session/current_user_provider.dart';
 import 'contacts_screen.dart';
 import 'conversations_view_model.dart';
 import 'conversation_screen.dart';
@@ -11,17 +13,19 @@ import 'conversation_screen.dart';
 /// Starting something new (a 1:1 or a group) happens on a separate screen
 /// (ContactsScreen, reached via the pencil action) rather than here, the same
 /// split most chat apps use between "your chats" and "who to message."
-class ConversationsListScreen extends StatelessWidget {
+class ConversationsListScreen extends ConsumerWidget {
   const ConversationsListScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    final feedVm = context.read<FeedViewModel>();
+  Widget build(BuildContext context, WidgetRef ref) {
+    final userId = ref.watch(currentUserProvider).requireValue!.id;
+    final socket = ref.watch(socketProvider(userId));
+    // The screen's own view model still uses package:provider until step 5.
     return ChangeNotifierProvider(
       create: (_) => ConversationsViewModel(
-        context.read<ApiService>(),
-        currentUserId: feedVm.currentUserId!,
-        socket: feedVm.socket,
+        ref.read(apiServiceProvider),
+        currentUserId: userId,
+        socket: socket,
       ),
       child: const _ConversationsListView(),
     );

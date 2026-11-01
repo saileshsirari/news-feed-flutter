@@ -38,10 +38,10 @@ dependencies:
   http: ^1.2.2
   web_socket_channel: ^3.0.1
   shared_preferences: ^2.3.3
-  # Provider, not Riverpod/Bloc — the simplest state-management step up from
-  # plain setState, appropriate while still on Flutter fundamentals (see
-  # flutter-learning.md); ChangeNotifier + Provider is the officially
-  # recommended starting point before reaching for something heavier.
+  # Riverpod owns app-wide state (services, current user, socket). Provider
+  # is only left for the chat/call screens' own view models and goes away
+  # when they become Riverpod notifiers (refactor step 5).
+  flutter_riverpod: ^3.4.3
   provider: ^6.1.2
   livekit_client: ^2.13.0
   permission_handler: ^13.0.2

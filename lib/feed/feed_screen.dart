@@ -1,20 +1,22 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/models.dart';
+import '../session/current_user_provider.dart';
 import 'feed_view_model.dart';
 
 /// Mirrors news-feed-android's FeedScreen.kt.
-class FeedScreen extends StatefulWidget {
+class FeedScreen extends ConsumerStatefulWidget {
   const FeedScreen({super.key});
 
   @override
-  State<FeedScreen> createState() => _FeedScreenState();
+  ConsumerState<FeedScreen> createState() => _FeedScreenState();
 }
 
-class _FeedScreenState extends State<FeedScreen> {
+class _FeedScreenState extends ConsumerState<FeedScreen> {
   @override
   Widget build(BuildContext context) {
-    final vm = context.watch<FeedViewModel>();
+    final user = ref.watch(currentUserProvider).requireValue!;
+    final vm = ref.watch(feedViewModelProvider(user));
 
     // Fired by the realtime socket path, not by a fresh network read itself —
     // see FeedViewModel's dismissFanoutMessage.
@@ -40,7 +42,7 @@ class _FeedScreenState extends State<FeedScreen> {
         ),
         actions: [
           IconButton(icon: const Icon(Icons.refresh), onPressed: vm.refresh),
-          IconButton(icon: const Icon(Icons.logout), onPressed: vm.logout),
+          IconButton(icon: const Icon(Icons.logout), onPressed: ref.read(currentUserProvider.notifier).logout),
         ],
       ),
       floatingActionButton: FloatingActionButton(

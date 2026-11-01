@@ -1,31 +1,35 @@
+import 'dart:async';
 import 'package:flutter/foundation.dart';
-import '../config/app_config.dart';
+import 'package:flutter_riverpod/legacy.dart';
 import '../data/services/api_service.dart';
 import '../data/services/app_socket.dart';
 import '../data/services/cursor_codec.dart';
+import '../data/services/service_providers.dart';
+import '../data/services/socket_provider.dart';
 import '../models/models.dart';
 import '../session/user_session.dart';
 
 /// Mirrors news-feed-android's FeedViewModel.kt: ChangeNotifier is Flutter's
-/// closest equivalent to Kotlin's StateFlow-backed ViewModel for something
-/// this simple (see pubspec.yaml's note on Provider vs. Riverpod/Bloc).
+/// closest equivalent to Kotlin's StateFlow-backed ViewModel.
+///
+/// Feed state only, for one logged-in user. Login/logout and the socket moved
+/// out (currentUserProvider, socketProvider), so this is created after login
+/// with the user and socket already known, and thrown away on logout.
 class FeedViewModel extends ChangeNotifier {
   final ApiService _api;
-  final UserSession _session;
-  // Only needed to open the socket; goes away once the socket moves out of
-  // this view model (next refactoring step).
-  final AppConfig _config;
-  AppSocket? _socket;
+  final CurrentUser _user;
+  late final StreamSubscription<Map<String, dynamic>> _socketSub;
+  bool _disposed = false;
 
-  FeedViewModel(this._api, this._session, this._config) {
-    _init();
+  FeedViewModel(this._api, this._user, AppSocket socket) {
+    _socketSub = socket.events.listen((event) {
+      if (event['type'] == 'feed_updated') _checkForNewPosts();
+    });
+    refresh();
   }
 
-  bool loggedIn = false;
-  String currentUsername = '';
-  int followerCount = 0;
-  bool loggingIn = false;
-  String? loginError;
+  String get currentUsername => _user.username;
+  int get followerCount => _user.followerCount;
   bool isLoading = false;
   bool isPosting = false;
   List<Post> posts = [];
@@ -37,53 +41,16 @@ class FeedViewModel extends ChangeNotifier {
   /// GET /feed/{userId}/new confirms something's actually new.
   bool hasNewPosts = false;
 
-  int? _currentUserId;
-  int? get currentUserId => _currentUserId;
-
-  /// Shared with the chat feature — one WebSocket per logged-in user carries
-  /// both feed_updated and chat events (message_created,
-  /// read_receipt_updated); see app_socket.dart's doc comment for why this
-  /// isn't a second, separate connection.
-  AppSocket? get socket => _socket;
-
-  Future<void> _init() async {
-    final user = await _session.current();
-    if (user == null) return;
-    _currentUserId = user.id;
-    loggedIn = true;
-    currentUsername = user.username;
-    followerCount = user.followerCount;
-    // Connect before notifying: HomeScreen watches currentUserId and, the
-    // moment it's non-null, builds ConversationsListScreen with today's
-    // `socket` value baked in at construction time (see its
-    // ChangeNotifierProvider) — never re-read afterward. notifyListeners()
-    // first, socket second used to leave that provider holding a permanent
-    // null, silently killing every live chat/read-receipt push for the rest
-    // of the session (REST calls still worked, so nothing looked broken
-    // until you noticed live updates never arrived).
-    _connectRealtime(user.id);
-    notifyListeners();
-    await refresh();
-  }
-
-  void _connectRealtime(int userId) {
-    _socket?.disconnect();
-    _socket = AppSocket(userId, _config)..connect();
-    _socket!.events.listen((event) {
-      if (event['type'] == 'feed_updated') _checkForNewPosts();
-    });
-  }
-
   /// The socket only ever says "something changed" — it never carries the
   /// post itself. This turns that bare signal into an actual answer via the
   /// same GET /feed/{userId}/new endpoint a manual poll would use; the
   /// socket just decides *when* to ask.
   Future<void> _checkForNewPosts() async {
-    if (_currentUserId == null || posts.isEmpty) return;
+    if (posts.isEmpty) return;
     final top = posts.first;
     final since = CursorCodec.encode(top.createdAt, top.id);
     try {
-      final page = await _api.getNewerFeed(_currentUserId!, since: since, limit: 1);
+      final page = await _api.getNewerFeed(_user.id, since: since, limit: 1);
       if (page.posts.isNotEmpty) {
         hasNewPosts = true;
         notifyListeners();
@@ -93,59 +60,27 @@ class FeedViewModel extends ChangeNotifier {
     }
   }
 
+  // This view model now dies on logout, possibly while a request is still in
+  // flight; its late notifyListeners() must be a no-op, not a
+  // "used after being disposed" error.
+  @override
+  void notifyListeners() {
+    if (!_disposed) super.notifyListeners();
+  }
+
   @override
   void dispose() {
-    _socket?.disconnect();
+    _disposed = true;
+    _socketSub.cancel();
     super.dispose();
   }
 
-  Future<void> login(String username) async {
-    final trimmed = username.trim();
-    if (trimmed.isEmpty) return;
-    loggingIn = true;
-    loginError = null;
-    notifyListeners();
-    try {
-      final user = await _api.getUserByUsername(trimmed);
-      await _session.save(user);
-      _currentUserId = user.id;
-      loggedIn = true;
-      currentUsername = user.username;
-      followerCount = user.followerCount;
-      loggingIn = false;
-      posts = [];
-      nextCursor = null;
-      // Same ordering fix as _init() — see its comment.
-      _connectRealtime(user.id);
-      notifyListeners();
-      await refresh();
-    } catch (e) {
-      loggingIn = false;
-      loginError = 'Couldn\'t find "$trimmed": $e';
-      notifyListeners();
-    }
-  }
-
-  Future<void> logout() async {
-    _socket?.disconnect();
-    _socket = null;
-    await _session.clear();
-    loggedIn = false;
-    currentUsername = '';
-    followerCount = 0;
-    posts = [];
-    nextCursor = null;
-    _currentUserId = null;
-    notifyListeners();
-  }
-
   Future<void> refresh() async {
-    if (_currentUserId == null) return;
     isLoading = true;
     error = null;
     notifyListeners();
     try {
-      final page = await _api.getFeed(_currentUserId!, limit: _pageSize);
+      final page = await _api.getFeed(_user.id, limit: _pageSize);
       posts = page.posts;
       nextCursor = page.nextCursor;
       hasNewPosts = false;
@@ -159,11 +94,11 @@ class FeedViewModel extends ChangeNotifier {
   }
 
   Future<void> loadMore() async {
-    if (_currentUserId == null || nextCursor == null) return;
+    if (nextCursor == null) return;
     isLoading = true;
     notifyListeners();
     try {
-      final page = await _api.getFeed(_currentUserId!, limit: _pageSize, cursor: nextCursor);
+      final page = await _api.getFeed(_user.id, limit: _pageSize, cursor: nextCursor);
       posts = [...posts, ...page.posts];
       nextCursor = page.nextCursor;
       isLoading = false;
@@ -177,12 +112,12 @@ class FeedViewModel extends ChangeNotifier {
 
   Future<void> publishPost(String body) async {
     final trimmed = body.trim();
-    if (_currentUserId == null || trimmed.isEmpty) return;
+    if (trimmed.isEmpty) return;
     isPosting = true;
     error = null;
     notifyListeners();
     try {
-      final response = await _api.createPost(authorId: _currentUserId!, body: trimmed);
+      final response = await _api.createPost(authorId: _user.id, body: trimmed);
       isPosting = false;
       fanoutMessage = 'Fanned out to $followerCount followers in ${response.fanoutMs} ms';
       notifyListeners();
@@ -201,3 +136,15 @@ class FeedViewModel extends ChangeNotifier {
 
   static const _pageSize = 20;
 }
+
+/// One FeedViewModel per logged-in user. A bridge until step 5 replaces it
+/// with a Riverpod Notifier: Riverpod's legacy ChangeNotifierProvider rebuilds
+/// widgets on notifyListeners() and calls dispose() for us. autoDispose: it
+/// goes away with FeedScreen on logout.
+final feedViewModelProvider = ChangeNotifierProvider.autoDispose.family<FeedViewModel, CurrentUser>(
+  (ref, user) => FeedViewModel(
+    ref.watch(apiServiceProvider),
+    user,
+    ref.watch(socketProvider(user.id)),
+  ),
+);

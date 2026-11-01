@@ -1,21 +1,22 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:provider/provider.dart';
 import '../models/models.dart';
-import '../data/services/api_service.dart';
+import '../data/services/service_providers.dart';
 import 'contacts_view_model.dart';
 import 'conversation_screen.dart';
 
 /// The "Chat" tab: every user, tap one to start (or reopen) a 1:1 chat, or
 /// toggle selection mode (the group-add icon) to pick several for a group —
 /// same list either way, per how this was asked for.
-class ContactsScreen extends StatelessWidget {
+class ContactsScreen extends ConsumerWidget {
   final int currentUserId;
   const ContactsScreen({super.key, required this.currentUserId});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return ChangeNotifierProvider(
-      create: (_) => ContactsViewModel(context.read<ApiService>(), currentUserId),
+      create: (_) => ContactsViewModel(ref.read(apiServiceProvider), currentUserId),
       child: const _ContactsView(),
     );
   }

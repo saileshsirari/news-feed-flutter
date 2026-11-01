@@ -5,11 +5,10 @@ import 'package:flutter/material.dart';
 /// username from `npm run seed`'s output (e.g. "celebrity" or "user_0") and
 /// this resolves it to a user id via GET /users?username=...
 class LoginScreen extends StatefulWidget {
-  final bool loggingIn;
-  final String? error;
-  final ValueChanged<String> onLogin;
+  /// Completes once logged in; throws if the username doesn't exist.
+  final Future<void> Function(String username) onLogin;
 
-  const LoginScreen({super.key, required this.loggingIn, required this.error, required this.onLogin});
+  const LoginScreen({super.key, required this.onLogin});
 
   @override
   State<LoginScreen> createState() => _LoginScreenState();
@@ -17,6 +16,30 @@ class LoginScreen extends StatefulWidget {
 
 class _LoginScreenState extends State<LoginScreen> {
   final _controller = TextEditingController();
+  // "Logging in…" and the error message only matter to this screen, so they
+  // live here as plain widget state rather than in currentUserProvider.
+  bool _loggingIn = false;
+  String? _error;
+
+  Future<void> _login() async {
+    final username = _controller.text.trim();
+    if (username.isEmpty) return;
+    setState(() {
+      _loggingIn = true;
+      _error = null;
+    });
+    try {
+      // On success the app swaps this screen for HomeScreen, so there's
+      // nothing to reset here.
+      await widget.onLogin(username);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _loggingIn = false;
+        _error = 'Couldn\'t find "$username": $e';
+      });
+    }
+  }
 
   @override
   void dispose() {
@@ -59,20 +82,20 @@ class _LoginScreenState extends State<LoginScreen> {
               child: SizedBox(
                 width: double.infinity,
                 child: FilledButton(
-                  onPressed: widget.loggingIn ? null : () => widget.onLogin(_controller.text),
-                  child: Text(widget.loggingIn ? 'Logging in…' : 'Log in'),
+                  onPressed: _loggingIn ? null : _login,
+                  child: Text(_loggingIn ? 'Logging in…' : 'Log in'),
                 ),
               ),
             ),
-            if (widget.loggingIn)
+            if (_loggingIn)
               const Padding(
                 padding: EdgeInsets.only(top: 16),
                 child: Center(child: CircularProgressIndicator()),
               ),
-            if (widget.error != null)
+            if (_error != null)
               Padding(
                 padding: const EdgeInsets.only(top: 12),
-                child: Text(widget.error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
+                child: Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
               ),
           ],
         ),

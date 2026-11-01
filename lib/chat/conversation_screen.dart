@@ -1,28 +1,31 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:provider/provider.dart';
 import '../call/call_screen.dart';
-import '../feed/feed_view_model.dart';
-import '../data/services/api_service.dart';
+import '../data/services/service_providers.dart';
+import '../data/services/socket_provider.dart';
+import '../session/current_user_provider.dart';
 import '../models/models.dart';
 import 'conversation_view_model.dart';
 
-class ConversationScreen extends StatelessWidget {
+class ConversationScreen extends ConsumerWidget {
   final int conversationId;
   final String title;
 
   const ConversationScreen({super.key, required this.conversationId, required this.title});
 
   @override
-  Widget build(BuildContext context) {
-    final feedVm = context.read<FeedViewModel>();
+  Widget build(BuildContext context, WidgetRef ref) {
+    final userId = ref.watch(currentUserProvider).requireValue!.id;
+    final socket = ref.watch(socketProvider(userId));
     return ChangeNotifierProvider(
       create: (_) => ConversationViewModel(
-        context.read<ApiService>(),
+        ref.read(apiServiceProvider),
         conversationId: conversationId,
-        currentUserId: feedVm.currentUserId!,
-        socket: feedVm.socket,
+        currentUserId: userId,
+        socket: socket,
       ),
-      child: _ConversationView(title: title, currentUserId: feedVm.currentUserId!),
+      child: _ConversationView(title: title, currentUserId: userId),
     );
   }
 }

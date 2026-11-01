@@ -1,27 +1,27 @@
 import 'package:flutter/material.dart';
 import 'package:livekit_client/livekit_client.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:provider/provider.dart';
-import '../feed/feed_view_model.dart';
-import '../data/services/api_service.dart';
+import '../data/services/service_providers.dart';
+import '../session/current_user_provider.dart';
 import 'call_view_model.dart';
 
 /// A group call for one conversation — LiveKit room name == "conversation-
 /// <id>" (see chatService.createCallToken), so anyone with the call-token
 /// endpoint's OK (i.e. any participant) can join the same room independently;
 /// there's no separate "who's currently in the call" invite step.
-class CallScreen extends StatelessWidget {
+class CallScreen extends ConsumerWidget {
   final int conversationId;
   final String title;
   const CallScreen({super.key, required this.conversationId, required this.title});
 
   @override
-  Widget build(BuildContext context) {
-    final feedVm = context.read<FeedViewModel>();
+  Widget build(BuildContext context, WidgetRef ref) {
     return ChangeNotifierProvider(
       create: (_) => CallViewModel(
-        context.read<ApiService>(),
+        ref.read(apiServiceProvider),
         conversationId: conversationId,
-        currentUserId: feedVm.currentUserId!,
+        currentUserId: ref.read(currentUserProvider).requireValue!.id,
       ),
       child: _CallView(title: title),
     );
