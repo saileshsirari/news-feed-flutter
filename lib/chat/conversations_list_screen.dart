@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/models.dart';
-import '../session/current_user_provider.dart';
 import 'contacts_screen.dart';
 import 'conversations_notifier.dart';
 import 'conversation_screen.dart';
@@ -11,8 +10,8 @@ import 'conversation_screen.dart';
 /// (ContactsScreen, reached via the pencil action) rather than here, the same
 /// split most chat apps use between "your chats" and "who to message."
 ///
-/// Compose/Android: ≈ `val state by hiltViewModel<ConversationsViewModel>()
-/// .state.collectAsState()`. No ChangeNotifierProvider wrapper any more:
+/// Compose/Android: ≈ collecting `hiltViewModel<ConversationsViewModel>()`'s
+/// state with `collectAsState()`. No ChangeNotifierProvider wrapper any more:
 /// conversationsProvider is created when this first watches it.
 class ConversationsListScreen extends ConsumerWidget {
   const ConversationsListScreen({super.key});
@@ -20,7 +19,6 @@ class ConversationsListScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final vm = ref.watch(conversationsProvider);
-    final currentUserId = ref.watch(currentUserProvider).requireValue!.id;
     // ≈ the ViewModel itself, for calling load() (no rebuild from this read).
     final notifier = ref.read(conversationsProvider.notifier);
 
@@ -38,7 +36,7 @@ class ConversationsListScreen extends ConsumerWidget {
               // single "back" from there returns straight here, instead of
               // through an empty picker screen in between.
               await Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => ContactsScreen(currentUserId: currentUserId)),
+                MaterialPageRoute(builder: (_) => const ContactsScreen()),
               );
               notifier.load();
             },

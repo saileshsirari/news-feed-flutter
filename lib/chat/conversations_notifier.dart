@@ -28,7 +28,7 @@ class ConversationsState {
 }
 
 /// The "Chat" tab's primary view: conversations you're already in, most
-/// recently active first (server-sorted) — as opposed to contacts_view_model,
+/// recently active first (server-sorted) — as opposed to contacts_notifier,
 /// which lists every user you *could* start a chat with. Refreshes on three
 /// socket events: conversations_changed (see chatConsumer.ts's
 /// applyParticipantChange — a new chat/group you were just added to),
