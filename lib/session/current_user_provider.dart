@@ -6,7 +6,28 @@ import 'user_session.dart';
 /// then null (logged out) or the user. This used to live inside
 /// FeedViewModel, so chat and calls had to reach into the feed's view model
 /// to learn the user id; now everything watches this instead.
+///
+/// Compose/Android equivalent: an app-wide (activity-scoped) ViewModel
+///
+///     class SessionViewModel : ViewModel() {
+///       private val _user = MutableStateFlow<UiState<User?>>(UiState.Loading)
+///       val user: StateFlow<UiState<User?>> = _user
+///       init { viewModelScope.launch { _user.value = UiState.Success(session.current()) } }
+///       fun login(name: String) { ... }
+///       fun logout() { ... }
+///     }
+///
+///   - `AsyncNotifier<CurrentUser?>`   ≈ that ViewModel
+///   - `AsyncValue` (loading/data/error) ≈ a sealed `UiState` class, built in
+///   - `build()`                        ≈ `init { }` loading the first value
+///   - `state = AsyncData(user)`        ≈ `_user.value = UiState.Success(user)`
+///                                        (notifies watchers; no notifyListeners())
+///   - `login()` / `logout()`           ≈ ViewModel methods
 class CurrentUserNotifier extends AsyncNotifier<CurrentUser?> {
+  // `ref.watch` here, not `ref.read`: build() is the recipe, and watch means
+  // "rebuild me if that dependency changes" (≈ combine()/flatMapLatest on an
+  // upstream Flow). Methods below use `ref.read`: one-off actions, like
+  // calling an injected repository from a ViewModel method.
   @override
   Future<CurrentUser?> build() => ref.watch(userSessionProvider).current();
 
@@ -27,6 +48,10 @@ class CurrentUserNotifier extends AsyncNotifier<CurrentUser?> {
   }
 }
 
+/// How screens use it:
+///   - `ref.watch(currentUserProvider)`                 ≈ `vm.user.collectAsState()`
+///   - `ref.read(currentUserProvider.notifier).login()` ≈ `vm.login()`
+///   - the provider itself                               ≈ `viewModel<SessionViewModel>()`'s key
 final currentUserProvider = AsyncNotifierProvider<CurrentUserNotifier, CurrentUser?>(
   CurrentUserNotifier.new,
 );

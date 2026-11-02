@@ -14,6 +14,11 @@ import '../session/current_user_provider.dart';
 /// widget stays mounted for the whole logged-in session regardless of which
 /// tab is showing, so an incoming call banner can appear no matter where
 /// you're looking, not just while the Chat tab happens to be open.
+///
+/// Compose/Android: `ConsumerStatefulWidget` + `ConsumerState` ≈ a composable
+/// that needs both ViewModels (`ref`) and its own `remember`ed state
+/// (`_tabIndex`) plus lifecycle hooks (`initState`/`dispose` ≈
+/// `DisposableEffect`'s setup and `onDispose`).
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
 
@@ -34,6 +39,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     // fireImmediately hands us the socket right away; the old
     // "re-subscribe when the user id changes" bookkeeping is gone because
     // this widget never outlives its user.
+    // Compose/Android: ≈ `LaunchedEffect(Unit) { socket.events.collect { ... } }`,
+    // a side effect (show a snackbar) instead of drawing UI. The
+    // subscription is closed automatically when this widget is disposed,
+    // like the LaunchedEffect's coroutine being cancelled.
     ref.listenManual(socketProvider(userId), (_, socket) {
       _callSub?.cancel();
       _callSub = socket.events.listen((event) {

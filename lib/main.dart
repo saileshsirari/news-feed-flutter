@@ -8,6 +8,8 @@ void main() {
   // ProviderScope holds every provider's value for the whole app (the
   // services, the current user, the socket). Providers themselves are just
   // global recipes; the state lives here.
+  // Compose/Android: ≈ `@HiltAndroidApp` + the ViewModelStore, the container
+  // that holds every singleton and ViewModel instance.
   runApp(const ProviderScope(child: NewsFeedApp()));
 }
 
@@ -24,6 +26,16 @@ class NewsFeedApp extends StatelessWidget {
   }
 }
 
+/// Compose/Android equivalent:
+///
+///     @Composable fun Root(vm: SessionViewModel = hiltViewModel()) {
+///       when (val s = vm.user.collectAsState().value) { Loading -> ...; ... }
+///     }
+///
+///   - `ConsumerWidget`        ≈ a `@Composable` function that can read ViewModels
+///   - `WidgetRef ref`         ≈ access to `hiltViewModel()` / `LocalX.current`
+///   - `ref.watch(provider)`   ≈ `collectAsState()`: read + recompose on change
+///   - `ref.read(provider...)` ≈ grabbing the ViewModel to call a method, no recompose
 class _RootScreen extends ConsumerWidget {
   const _RootScreen();
 

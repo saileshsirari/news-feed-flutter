@@ -14,6 +14,15 @@ import 'service_providers.dart';
 ///
 /// autoDispose: once nothing watches it (the user logged out, so HomeScreen
 /// and every chat screen are gone), it disconnects.
+///
+/// Compose/Android equivalent: a Hilt-provided object scoped to "while
+/// logged in", like a custom `@UserScope` component.
+///   - `.family<AppSocket, int>` + `socketProvider(userId)`
+///       ≈ `@AssistedInject` / a factory: one instance per user id
+///   - `.autoDispose`
+///       ≈ a scope that ends when its last user is gone, like a ViewModel
+///         cleared when its screen leaves the back stack
+///   - `ref.onDispose(socket.disconnect)` ≈ `ViewModel.onCleared()`
 final socketProvider = Provider.autoDispose.family<AppSocket, int>((ref, userId) {
   final socket = AppSocket(userId, ref.watch(appConfigProvider))..connect();
   ref.onDispose(socket.disconnect);

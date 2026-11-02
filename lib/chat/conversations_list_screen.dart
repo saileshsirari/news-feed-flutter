@@ -21,6 +21,11 @@ class ConversationsListScreen extends ConsumerWidget {
     final userId = ref.watch(currentUserProvider).requireValue!.id;
     final socket = ref.watch(socketProvider(userId));
     // The screen's own view model still uses package:provider until step 5.
+    // Compose/Android: `ChangeNotifierProvider(create: ...)` here ≈
+    // `viewModel { ConversationsViewModel(api, userId, socket) }`, a
+    // ViewModel scoped to this screen, created once and cleared when it
+    // leaves. Below it, `context.watch<ConversationsViewModel>()` ≈
+    // `collectAsState()`.
     return ChangeNotifierProvider(
       create: (_) => ConversationsViewModel(
         ref.read(apiServiceProvider),

@@ -15,6 +15,10 @@ class FeedScreen extends ConsumerStatefulWidget {
 class _FeedScreenState extends ConsumerState<FeedScreen> {
   @override
   Widget build(BuildContext context) {
+    // Compose/Android: ≈ `val vm: FeedViewModel = hiltViewModel()` with the
+    // user passed in (assisted inject). `requireValue!` is safe because this
+    // screen only exists while someone is logged in, like the old
+    // `feedVm.currentUserId!`.
     final user = ref.watch(currentUserProvider).requireValue!;
     final vm = ref.watch(feedViewModelProvider(user));
 

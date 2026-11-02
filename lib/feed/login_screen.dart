@@ -18,6 +18,9 @@ class _LoginScreenState extends State<LoginScreen> {
   final _controller = TextEditingController();
   // "Logging in…" and the error message only matter to this screen, so they
   // live here as plain widget state rather than in currentUserProvider.
+  // Compose/Android: ≈ `var loggingIn by remember { mutableStateOf(false) }`
+  // inside the composable; `setState(() {...})` is the assignment that
+  // triggers recomposition.
   bool _loggingIn = false;
   String? _error;
 

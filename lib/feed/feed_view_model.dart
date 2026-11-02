@@ -141,6 +141,14 @@ class FeedViewModel extends ChangeNotifier {
 /// with a Riverpod Notifier: Riverpod's legacy ChangeNotifierProvider rebuilds
 /// widgets on notifyListeners() and calls dispose() for us. autoDispose: it
 /// goes away with FeedScreen on logout.
+///
+/// Compose/Android equivalent: `hiltViewModel<FeedViewModel>()` in FeedScreen.
+///   - `ChangeNotifier` + `notifyListeners()` ≈ a ViewModel that updates a
+///     `mutableStateOf`, except Flutter needs the manual notify call
+///   - `.family<..., CurrentUser>` ≈ `@AssistedInject` passing the user in
+///   - `.autoDispose` + `dispose()` ≈ ViewModel cleared, `onCleared()`
+///   - `ref.watch(feedViewModelProvider(user))` ≈ `hiltViewModel()` +
+///     reading its state, which recomposes on change
 final feedViewModelProvider = ChangeNotifierProvider.autoDispose.family<FeedViewModel, CurrentUser>(
   (ref, user) => FeedViewModel(
     ref.watch(apiServiceProvider),
