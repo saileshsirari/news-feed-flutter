@@ -1,48 +1,28 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:provider/provider.dart';
 import '../models/models.dart';
-import '../data/services/service_providers.dart';
-import '../data/services/socket_provider.dart';
 import '../session/current_user_provider.dart';
 import 'contacts_screen.dart';
-import 'conversations_view_model.dart';
+import 'conversations_notifier.dart';
 import 'conversation_screen.dart';
 
 /// The "Chat" tab itself — your existing conversations, most recent first.
 /// Starting something new (a 1:1 or a group) happens on a separate screen
 /// (ContactsScreen, reached via the pencil action) rather than here, the same
 /// split most chat apps use between "your chats" and "who to message."
+///
+/// Compose/Android: ≈ `val state by hiltViewModel<ConversationsViewModel>()
+/// .state.collectAsState()`. No ChangeNotifierProvider wrapper any more:
+/// conversationsProvider is created when this first watches it.
 class ConversationsListScreen extends ConsumerWidget {
   const ConversationsListScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final userId = ref.watch(currentUserProvider).requireValue!.id;
-    final socket = ref.watch(socketProvider(userId));
-    // The screen's own view model still uses package:provider until step 5.
-    // Compose/Android: `ChangeNotifierProvider(create: ...)` here ≈
-    // `viewModel { ConversationsViewModel(api, userId, socket) }`, a
-    // ViewModel scoped to this screen, created once and cleared when it
-    // leaves. Below it, `context.watch<ConversationsViewModel>()` ≈
-    // `collectAsState()`.
-    return ChangeNotifierProvider(
-      create: (_) => ConversationsViewModel(
-        ref.read(apiServiceProvider),
-        currentUserId: userId,
-        socket: socket,
-      ),
-      child: const _ConversationsListView(),
-    );
-  }
-}
-
-class _ConversationsListView extends StatelessWidget {
-  const _ConversationsListView();
-
-  @override
-  Widget build(BuildContext context) {
-    final vm = context.watch<ConversationsViewModel>();
+    final vm = ref.watch(conversationsProvider);
+    final currentUserId = ref.watch(currentUserProvider).requireValue!.id;
+    // ≈ the ViewModel itself, for calling load() (no rebuild from this read).
+    final notifier = ref.read(conversationsProvider.notifier);
 
     return Scaffold(
       appBar: AppBar(
@@ -58,12 +38,12 @@ class _ConversationsListView extends StatelessWidget {
               // single "back" from there returns straight here, instead of
               // through an empty picker screen in between.
               await Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => ContactsScreen(currentUserId: vm.currentUserId)),
+                MaterialPageRoute(builder: (_) => ContactsScreen(currentUserId: currentUserId)),
               );
-              vm.load();
+              notifier.load();
             },
           ),
-          IconButton(icon: const Icon(Icons.refresh), onPressed: vm.load),
+          IconButton(icon: const Icon(Icons.refresh), onPressed: notifier.load),
         ],
       ),
       body: Builder(
@@ -88,12 +68,12 @@ class _ConversationsListView extends StatelessWidget {
   }
 }
 
-class _ConversationRow extends StatelessWidget {
+class _ConversationRow extends ConsumerWidget {
   final ConversationSummary conversation;
   const _ConversationRow(this.conversation);
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final title = conversation.displayTitle();
     return ListTile(
       leading: CircleAvatar(
@@ -111,17 +91,18 @@ class _ConversationRow extends StatelessWidget {
           : null,
       onTap: () async {
         // Await the push and reload on return: the push events this list
-        // listens for (see ConversationsViewModel) exclude whoever caused
+        // listens for (see ConversationsNotifier) exclude whoever caused
         // them, so sending a message or marking this conversation read
         // yourself never arrives as a push here — only popping back and
         // re-fetching picks up your own last message / cleared unread count.
-        final vm = context.read<ConversationsViewModel>();
+        // Grab the notifier before the await, like the old code grabbed vm.
+        final notifier = ref.read(conversationsProvider.notifier);
         await Navigator.of(context).push(
           MaterialPageRoute(
             builder: (_) => ConversationScreen(conversationId: conversation.id, title: title),
           ),
         );
-        vm.load();
+        notifier.load();
       },
     );
   }

@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -8,19 +7,12 @@ import 'package:http/testing.dart';
 import 'package:news_feed_flutter/chat/conversation_notifier.dart';
 import 'package:news_feed_flutter/config/app_config.dart';
 import 'package:news_feed_flutter/data/services/api_service.dart';
-import 'package:news_feed_flutter/data/services/app_socket.dart';
 import 'package:news_feed_flutter/data/services/service_providers.dart';
 import 'package:news_feed_flutter/data/services/socket_provider.dart';
 import 'package:news_feed_flutter/session/current_user_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-/// A socket that never connects; the test pushes events into it by hand.
-class FakeSocket extends AppSocket {
-  FakeSocket(AppConfig config) : super(1, config);
-  final controller = StreamController<Map<String, dynamic>>.broadcast();
-  @override
-  Stream<Map<String, dynamic>> get events => controller.stream;
-}
+import '../helpers/fake_socket.dart';
 
 Map<String, dynamic> message(int id, {int senderId = 2, String body = 'hi'}) => {
       'id': id,
@@ -43,7 +35,7 @@ void main() {
   setUp(() {
     // Logged in as user 1 (UserSession reads these keys).
     SharedPreferences.setMockInitialValues({'id': 1, 'username': 'user_0', 'followerCount': 0});
-    socket = FakeSocket(config);
+    socket = FakeSocket();
     serverMessages = [message(11), message(10)];
     requests = [];
   });
