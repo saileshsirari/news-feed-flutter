@@ -41,6 +41,14 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
     // state and rebuild whenever the notifier assigns a new one.
     final vm = ref.watch(conversationProvider(widget.conversationId));
 
+    // Keep the newest message in view: jump there when the thread first
+    // loads, glide there when a message arrives or you send one. A side
+    // effect, so ref.listen (≈ `LaunchedEffect(messages.size) {
+    // listState.animateScrollToItem(last) }` in Compose).
+    ref.listen(conversationProvider(widget.conversationId).select((s) => s.messages.length), (previous, next) {
+      if (next > (previous ?? 0)) _scrollToBottom(animate: (previous ?? 0) > 0);
+    });
+
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.title),
@@ -108,6 +116,20 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
         ],
       ),
     );
+  }
+
+  /// After the frame, so the list has laid out the new message and
+  /// maxScrollExtent includes it.
+  void _scrollToBottom({required bool animate}) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!_scrollController.hasClients) return;
+      final bottom = _scrollController.position.maxScrollExtent;
+      if (animate) {
+        _scrollController.animateTo(bottom, duration: const Duration(milliseconds: 250), curve: Curves.easeOut);
+      } else {
+        _scrollController.jumpTo(bottom);
+      }
+    });
   }
 
   void _send() {

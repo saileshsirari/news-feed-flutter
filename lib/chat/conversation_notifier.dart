@@ -105,6 +105,13 @@ class ConversationNotifier extends Notifier<ConversationState> {
   }
 
   void _onEvent(Map<String, dynamic> event) {
+    if (event['type'] == 'reconnected') {
+      // Whatever arrived while the socket was down was never delivered:
+      // reload both the messages and everyone's read pointers.
+      _fetchMessages(markReadAfter: true);
+      _loadReadStates();
+      return;
+    }
     if (event['conversationId'] != conversationId) return;
     if (event['type'] == 'message_created') {
       // The push only ever carries an id, same "go fetch the real thing"

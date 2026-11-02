@@ -74,6 +74,12 @@ class FeedNotifier extends Notifier<FeedState> {
   // before `state` exists, and reading `state` there throws.
   late int _userId;
 
+  /// Posts this user just published that the server's feed doesn't include
+  /// yet. Fanout happens in the background a moment after POST /posts
+  /// returns (and GET /feed may serve a cached page until then), so a
+  /// refresh in that window would otherwise make your own new post vanish.
+  final _unconfirmedOwnPosts = <Post>[];
+
   @override
   FeedState build() {
     // ref.read, not watch: the user can't change while FeedScreen exists
@@ -81,7 +87,9 @@ class FeedNotifier extends Notifier<FeedState> {
     final user = ref.read(currentUserProvider).requireValue!;
     _userId = user.id;
     final sub = ref.watch(socketProvider(user.id)).events.listen((event) {
-      if (event['type'] == 'feed_updated') _checkForNewPosts();
+      if (event['type'] == 'feed_updated') _checkForNewPostsWithRetry();
+      // Missed any feed_updated while disconnected? Ask once.
+      if (event['type'] == 'reconnected') _checkForNewPosts();
     });
     ref.onDispose(sub.cancel);
 
@@ -91,19 +99,34 @@ class FeedNotifier extends Notifier<FeedState> {
     return FeedState(user: user);
   }
 
+  /// The server sends feed_updated when a post is *created*, before its
+  /// background fanout has put it in anyone's feed (fanoutService.ts), so
+  /// asking right away usually finds nothing. Ask again a little later
+  /// instead of missing the post until the next manual refresh.
+  Future<void> _checkForNewPostsWithRetry() async {
+    for (final delay in const [Duration.zero, Duration(seconds: 2), Duration(seconds: 5)]) {
+      if (delay > Duration.zero) await Future<void>.delayed(delay);
+      if (!ref.mounted || state.hasNewPosts) return;
+      if (await _checkForNewPosts()) return;
+    }
+  }
+
   /// The socket only ever says "something changed" — it never carries the
   /// post itself. This turns that bare signal into an actual answer via the
   /// same GET /feed/{userId}/new endpoint a manual poll would use; the
-  /// socket just decides *when* to ask.
-  Future<void> _checkForNewPosts() async {
-    if (state.posts.isEmpty) return;
+  /// socket just decides *when* to ask. Returns whether anything was new.
+  Future<bool> _checkForNewPosts() async {
+    if (state.posts.isEmpty) return false;
     final top = state.posts.first;
     final since = CursorCodec.encode(top.createdAt, top.id);
     try {
       final page = await ref.read(apiServiceProvider).getNewerFeed(_userId, since: since, limit: 1);
-      if (ref.mounted && page.posts.isNotEmpty) state = state.copyWith(hasNewPosts: true);
+      if (!ref.mounted || page.posts.isEmpty) return false;
+      state = state.copyWith(hasNewPosts: true);
+      return true;
     } catch (_) {
       // Best-effort — a failed "anything new?" check just means no banner.
+      return false;
     }
   }
 
@@ -116,7 +139,12 @@ class FeedNotifier extends Notifier<FeedState> {
     try {
       final page = await ref.read(apiServiceProvider).getFeed(_userId, limit: _pageSize);
       if (!ref.mounted) return;
-      state = state.copyWith(posts: page.posts, nextCursor: page.nextCursor, hasNewPosts: false, isLoading: false);
+      // Once the server's page has an own post, it's confirmed; until then,
+      // keep showing it on top.
+      final serverIds = page.posts.map((p) => p.id).toSet();
+      _unconfirmedOwnPosts.removeWhere((p) => serverIds.contains(p.id));
+      final posts = [..._unconfirmedOwnPosts, ...page.posts];
+      state = state.copyWith(posts: posts, nextCursor: page.nextCursor, hasNewPosts: false, isLoading: false);
     } catch (e) {
       if (!ref.mounted) return;
       state = state.copyWith(isLoading: false, error: 'Couldn\'t load feed: $e');
@@ -144,11 +172,15 @@ class FeedNotifier extends Notifier<FeedState> {
     try {
       final response = await ref.read(apiServiceProvider).createPost(authorId: _userId, body: trimmed);
       if (!ref.mounted) return;
+      // Show it right away from the POST response. The old code refreshed
+      // here instead, which usually got a feed from before the fanout and
+      // so didn't include the post you'd just written.
+      _unconfirmedOwnPosts.insert(0, response.post);
       state = state.copyWith(
         isPosting: false,
+        posts: [response.post, ...state.posts],
         fanoutMessage: 'Fanned out to ${state.user.followerCount} followers in ${response.fanoutMs} ms',
       );
-      await refresh();
     } catch (e) {
       if (!ref.mounted) return;
       state = state.copyWith(isPosting: false, error: 'Couldn\'t post: $e');

@@ -47,7 +47,9 @@ class ConversationsState {
 /// `StateFlow<ConversationsUiState>` and a public `load()`. No family here:
 /// there's only ever one Chat tab, so no id is needed to tell instances apart.
 class ConversationsNotifier extends Notifier<ConversationsState> {
-  static const _reloadTriggers = {'conversations_changed', 'message_created', 'read_receipt_updated'};
+  // 'reconnected' (see AppSocket): catch up on anything missed while the
+  // socket was down.
+  static const _reloadTriggers = {'conversations_changed', 'message_created', 'read_receipt_updated', 'reconnected'};
 
   late int _currentUserId;
 

@@ -124,6 +124,17 @@ void main() {
     expect(jsonDecode(requests.last.body)['lastReadMessageId'], 13);
   });
 
+  test('after a reconnect, reloads messages missed while disconnected', () async {
+    final container = await openContainer();
+    final sub = await open(container);
+    serverMessages = [message(14), ...serverMessages]; // arrived while the socket was down
+
+    socket.controller.add({'type': 'reconnected'});
+    await pumpEventQueue();
+
+    expect(sub.read().messages.map((m) => m.id), [10, 11, 14]);
+  });
+
   test('send appends the sent message', () async {
     final container = await openContainer();
     final sub = await open(container);

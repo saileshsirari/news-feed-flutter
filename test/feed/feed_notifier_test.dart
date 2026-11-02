@@ -96,7 +96,7 @@ void main() {
     expect(sub.read().hasNewPosts, isTrue);
   });
 
-  test('publishPost reports the fanout, refreshes, and the message can be dismissed', () async {
+  test('publishPost shows the new post at once, reports the fanout, and the message can be dismissed', () async {
     final (container, sub) = await open();
     final notifier = container.read(feedProvider.notifier);
     final messages = <String?>[];
@@ -104,11 +104,33 @@ void main() {
 
     await notifier.publishPost('  hello  ');
 
+    expect(sub.read().posts.map((p) => p.id), [21, 20, 19]);
     expect(messages, ['Fanned out to 12 followers in 4.5 ms']);
-    expect(jsonDecode(requests.firstWhere((r) => r.method == 'POST').body), {'authorId': 1, 'body': 'hello'});
-    expect(requests.last.url.path, '/feed/1'); // refreshed afterwards
+    expect(jsonDecode(requests.last.body), {'authorId': 1, 'body': 'hello'});
+    expect(requests.last.url.path, '/posts'); // no refresh: it would return the pre-fanout feed
 
     notifier.dismissFanoutMessage();
     expect(sub.read().fanoutMessage, isNull);
+  });
+
+  test('a refresh before the fanout lands keeps your own new post on top', () async {
+    final (container, sub) = await open();
+    final notifier = container.read(feedProvider.notifier);
+    await notifier.publishPost('hello');
+
+    // The fake server's feed still doesn't include post 21 (fanout pending).
+    await notifier.refresh();
+
+    expect(sub.read().posts.map((p) => p.id), [21, 20, 19]);
+  });
+
+  test('reconnecting checks for posts missed while disconnected', () async {
+    final (_, sub) = await open();
+    newerPosts = [post(25)];
+
+    socket.controller.add({'type': 'reconnected'});
+    await pumpEventQueue();
+
+    expect(sub.read().hasNewPosts, isTrue);
   });
 }
