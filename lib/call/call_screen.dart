@@ -1,15 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:livekit_client/livekit_client.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:provider/provider.dart';
-import '../data/services/service_providers.dart';
-import '../session/current_user_provider.dart';
-import 'call_view_model.dart';
+import 'call_notifier.dart';
 
 /// A group call for one conversation — LiveKit room name == "conversation-
-/// <id>" (see chatService.createCallToken), so anyone with the call-token
+/// `<id>`" (see chatService.createCallToken), so anyone with the call-token
 /// endpoint's OK (i.e. any participant) can join the same room independently;
 /// there's no separate "who's currently in the call" invite step.
+///
+/// Compose/Android: ≈ collecting `hiltViewModel<CallViewModel>(key = id)`'s
+/// state. Every Room change bumps CallState.roomRevision, so this rebuilds
+/// and the grid and buttons below re-read the Room.
 class CallScreen extends ConsumerWidget {
   final int conversationId;
   final String title;
@@ -17,24 +18,8 @@ class CallScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    return ChangeNotifierProvider(
-      create: (_) => CallViewModel(
-        ref.read(apiServiceProvider),
-        conversationId: conversationId,
-        currentUserId: ref.read(currentUserProvider).requireValue!.id,
-      ),
-      child: _CallView(title: title),
-    );
-  }
-}
-
-class _CallView extends StatelessWidget {
-  final String title;
-  const _CallView({required this.title});
-
-  @override
-  Widget build(BuildContext context) {
-    final vm = context.watch<CallViewModel>();
+    final vm = ref.watch(callProvider(conversationId));
+    final notifier = ref.read(callProvider(conversationId).notifier);
     final room = vm.room;
 
     return Scaffold(
@@ -63,7 +48,7 @@ class _CallView extends StatelessWidget {
                 ? const Center(child: CircularProgressIndicator())
                 : _ParticipantGrid(room: room),
       ),
-      bottomNavigationBar: room == null ? null : SafeArea(child: _CallControls(vm: vm)),
+      bottomNavigationBar: room == null ? null : SafeArea(child: _CallControls(vm: vm, notifier: notifier)),
     );
   }
 }
@@ -184,8 +169,9 @@ class _ParticipantTile extends StatelessWidget {
 }
 
 class _CallControls extends StatelessWidget {
-  final CallViewModel vm;
-  const _CallControls({required this.vm});
+  final CallState vm;
+  final CallNotifier notifier;
+  const _CallControls({required this.vm, required this.notifier});
 
   @override
   Widget build(BuildContext context) {
@@ -196,11 +182,11 @@ class _CallControls extends StatelessWidget {
         children: [
           _ControlButton(
             icon: vm.isMicEnabled ? Icons.mic : Icons.mic_off,
-            onPressed: vm.toggleMic,
+            onPressed: notifier.toggleMic,
           ),
           _ControlButton(
             icon: vm.isCameraEnabled ? Icons.videocam : Icons.videocam_off,
-            onPressed: vm.toggleCamera,
+            onPressed: notifier.toggleCamera,
           ),
           _ControlButton(
             icon: vm.isRecording ? Icons.stop_circle : Icons.fiber_manual_record,
@@ -209,7 +195,7 @@ class _CallControls extends StatelessWidget {
                 ? null
                 : () async {
                     try {
-                      await vm.toggleRecording();
+                      await notifier.toggleRecording();
                     } catch (e) {
                       if (context.mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(
@@ -223,7 +209,7 @@ class _CallControls extends StatelessWidget {
             icon: Icons.call_end,
             backgroundColor: Colors.red,
             onPressed: () async {
-              await vm.leave();
+              await notifier.leave();
               if (context.mounted) Navigator.of(context).pop();
             },
           ),
