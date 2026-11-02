@@ -1,45 +1,29 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:provider/provider.dart';
 import '../call/call_screen.dart';
-import '../data/services/service_providers.dart';
-import '../data/services/socket_provider.dart';
 import '../session/current_user_provider.dart';
 import '../models/models.dart';
-import 'conversation_view_model.dart';
+import 'conversation_notifier.dart';
 
-class ConversationScreen extends ConsumerWidget {
+/// Compose/Android: ≈ a screen composable doing
+/// `val state by vm.state.collectAsState()` with
+/// `vm = hiltViewModel(key = conversationId)`, plus `remember`ed text field
+/// and scroll state (the TextEditingController / ScrollController below).
+///
+/// No ChangeNotifierProvider wrapper any more: conversationProvider
+/// (autoDispose) is created when this screen first watches it and cleared
+/// when the screen closes.
+class ConversationScreen extends ConsumerStatefulWidget {
   final int conversationId;
   final String title;
 
   const ConversationScreen({super.key, required this.conversationId, required this.title});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final userId = ref.watch(currentUserProvider).requireValue!.id;
-    final socket = ref.watch(socketProvider(userId));
-    return ChangeNotifierProvider(
-      create: (_) => ConversationViewModel(
-        ref.read(apiServiceProvider),
-        conversationId: conversationId,
-        currentUserId: userId,
-        socket: socket,
-      ),
-      child: _ConversationView(title: title, currentUserId: userId),
-    );
-  }
+  ConsumerState<ConversationScreen> createState() => _ConversationScreenState();
 }
 
-class _ConversationView extends StatefulWidget {
-  final String title;
-  final int currentUserId;
-  const _ConversationView({required this.title, required this.currentUserId});
-
-  @override
-  State<_ConversationView> createState() => _ConversationViewState();
-}
-
-class _ConversationViewState extends State<_ConversationView> {
+class _ConversationScreenState extends ConsumerState<ConversationScreen> {
   final _controller = TextEditingController();
   final _scrollController = ScrollController();
 
@@ -52,7 +36,10 @@ class _ConversationViewState extends State<_ConversationView> {
 
   @override
   Widget build(BuildContext context) {
-    final vm = context.watch<ConversationViewModel>();
+    final currentUserId = ref.watch(currentUserProvider).requireValue!.id;
+    // Was: context.watch<ConversationViewModel>(). Same idea: read the
+    // state and rebuild whenever the notifier assigns a new one.
+    final vm = ref.watch(conversationProvider(widget.conversationId));
 
     return Scaffold(
       appBar: AppBar(
@@ -63,7 +50,7 @@ class _ConversationViewState extends State<_ConversationView> {
             tooltip: 'Start call',
             onPressed: () => Navigator.of(context).push(
               MaterialPageRoute(
-                builder: (_) => CallScreen(conversationId: vm.conversationId, title: widget.title),
+                builder: (_) => CallScreen(conversationId: widget.conversationId, title: widget.title),
               ),
             ),
           ),
@@ -85,15 +72,15 @@ class _ConversationViewState extends State<_ConversationView> {
                     itemCount: vm.messages.length,
                     itemBuilder: (context, index) {
                       final message = vm.messages[index];
-                      final isMine = message.senderId == widget.currentUserId;
+                      final isMine = message.senderId == currentUserId;
                       // Only the current user's most recent message can show
                       // a "Seen" tick — same single-indicator convention as
                       // WhatsApp, rather than a tick per message.
-                      final isLastOfMine = isMine && index == vm.messages.lastIndexWhere((m) => m.senderId == widget.currentUserId);
+                      final isLastOfMine = isMine && index == vm.messages.lastIndexWhere((m) => m.senderId == currentUserId);
                       return _MessageBubble(
                         message: message,
                         isMine: isMine,
-                        showSeen: isLastOfMine && vm.isReadByOthers(message.id),
+                        showSeen: isLastOfMine && vm.isReadByOthers(message.id, currentUserId: currentUserId),
                       );
                     },
                   ),
@@ -107,12 +94,12 @@ class _ConversationViewState extends State<_ConversationView> {
                     child: TextField(
                       controller: _controller,
                       decoration: const InputDecoration(hintText: 'Message', border: OutlineInputBorder()),
-                      onSubmitted: (_) => _send(vm),
+                      onSubmitted: (_) => _send(),
                     ),
                   ),
                   IconButton(
                     icon: const Icon(Icons.send),
-                    onPressed: vm.isSending ? null : () => _send(vm),
+                    onPressed: vm.isSending ? null : _send,
                   ),
                 ],
               ),
@@ -123,9 +110,11 @@ class _ConversationViewState extends State<_ConversationView> {
     );
   }
 
-  void _send(ConversationViewModel vm) {
+  void _send() {
     if (_controller.text.trim().isEmpty) return;
-    vm.send(_controller.text);
+    // ref.read(...notifier) to call a method (≈ `vm.send(text)` in Compose);
+    // ref.watch above is only for reading state.
+    ref.read(conversationProvider(widget.conversationId).notifier).send(_controller.text);
     _controller.clear();
   }
 }
