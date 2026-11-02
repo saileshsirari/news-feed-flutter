@@ -2,34 +2,29 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/models.dart';
 import '../session/current_user_provider.dart';
-import 'feed_view_model.dart';
+import 'feed_notifier.dart';
 
 /// Mirrors news-feed-android's FeedScreen.kt.
-class FeedScreen extends ConsumerStatefulWidget {
+///
+/// Compose/Android: ≈ collecting `hiltViewModel<FeedViewModel>()`'s state;
+/// `vm` below is the state, `notifier` the ViewModel you call methods on.
+class FeedScreen extends ConsumerWidget {
   const FeedScreen({super.key});
 
   @override
-  ConsumerState<FeedScreen> createState() => _FeedScreenState();
-}
+  Widget build(BuildContext context, WidgetRef ref) {
+    final vm = ref.watch(feedProvider);
+    final notifier = ref.read(feedProvider.notifier);
 
-class _FeedScreenState extends ConsumerState<FeedScreen> {
-  @override
-  Widget build(BuildContext context) {
-    // Compose/Android: ≈ `val vm: FeedViewModel = hiltViewModel()` with the
-    // user passed in (assisted inject). `requireValue!` is safe because this
-    // screen only exists while someone is logged in, like the old
-    // `feedVm.currentUserId!`.
-    final user = ref.watch(currentUserProvider).requireValue!;
-    final vm = ref.watch(feedViewModelProvider(user));
-
-    // Fired by the realtime socket path, not by a fresh network read itself —
-    // see FeedViewModel's dismissFanoutMessage.
-    if (vm.fanoutMessage != null) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(vm.fanoutMessage!)));
-        vm.dismissFanoutMessage();
-      });
-    }
+    // A one-off side effect (show a snackbar), not something to draw, so
+    // listen instead of watch: the callback runs once per change, outside
+    // build. ≈ `LaunchedEffect(state.fanoutMessage) { snackbarHost.show(...) }`.
+    // Replaces the old "check in build, then addPostFrameCallback" dance.
+    ref.listen(feedProvider.select((s) => s.fanoutMessage), (_, message) {
+      if (message == null) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+      notifier.dismissFanoutMessage();
+    });
 
     return Scaffold(
       appBar: AppBar(
@@ -39,18 +34,18 @@ class _FeedScreenState extends ConsumerState<FeedScreen> {
           children: [
             const Text('News Feed'),
             Text(
-              '@${vm.currentUsername} · ${vm.followerCount} followers',
+              '@${vm.user.username} · ${vm.user.followerCount} followers',
               style: Theme.of(context).textTheme.bodySmall,
             ),
           ],
         ),
         actions: [
-          IconButton(icon: const Icon(Icons.refresh), onPressed: vm.refresh),
+          IconButton(icon: const Icon(Icons.refresh), onPressed: notifier.refresh),
           IconButton(icon: const Icon(Icons.logout), onPressed: ref.read(currentUserProvider.notifier).logout),
         ],
       ),
       floatingActionButton: FloatingActionButton(
-        onPressed: () => _showComposeDialog(context, vm),
+        onPressed: () => _showComposeDialog(context, vm, notifier),
         child: const Icon(Icons.add),
       ),
       body: Column(
@@ -64,7 +59,7 @@ class _FeedScreenState extends ConsumerState<FeedScreen> {
             Material(
               color: Theme.of(context).colorScheme.primaryContainer,
               child: InkWell(
-                onTap: vm.refresh,
+                onTap: notifier.refresh,
                 child: Padding(
                   padding: const EdgeInsets.all(12),
                   child: Text(
@@ -87,7 +82,7 @@ class _FeedScreenState extends ConsumerState<FeedScreen> {
                     child: vm.isLoading
                         ? const CircularProgressIndicator()
                         : vm.nextCursor != null
-                            ? TextButton(onPressed: vm.loadMore, child: const Text('Load more'))
+                            ? TextButton(onPressed: notifier.loadMore, child: const Text('Load more'))
                             : vm.posts.isEmpty
                                 ? const Text('No posts yet — follow someone or write one.')
                                 : const SizedBox.shrink(),
@@ -101,7 +96,7 @@ class _FeedScreenState extends ConsumerState<FeedScreen> {
     );
   }
 
-  void _showComposeDialog(BuildContext context, FeedViewModel vm) {
+  void _showComposeDialog(BuildContext context, FeedState vm, FeedNotifier notifier) {
     final controller = TextEditingController();
     showDialog(
       context: context,
@@ -109,7 +104,7 @@ class _FeedScreenState extends ConsumerState<FeedScreen> {
         isPosting: vm.isPosting,
         controller: controller,
         onPost: (body) {
-          vm.publishPost(body);
+          notifier.publishPost(body);
           Navigator.of(dialogContext).pop();
         },
       ),
