@@ -1,8 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_media/shared_media.dart';
 import '../models/models.dart';
 import '../session/current_user_provider.dart';
 import 'feed_notifier.dart';
+
+/// The feed's own rule for how many files a post may carry (the server's
+/// MAX_MEDIA_PER_POST); one draft for the compose dialog.
+const _composeDraft = (id: 'feed', maxItems: 10);
 
 /// Mirrors news-feed-android's FeedScreen.kt.
 ///
@@ -103,8 +108,8 @@ class FeedScreen extends ConsumerWidget {
       builder: (dialogContext) => _ComposePostDialog(
         isPosting: vm.isPosting,
         controller: controller,
-        onPost: (body) {
-          notifier.publishPost(body);
+        onPost: (body, mediaIds) {
+          notifier.publishPost(body, mediaIds: mediaIds);
           Navigator.of(dialogContext).pop();
         },
       ),
@@ -132,31 +137,39 @@ class _PostRow extends StatelessWidget {
               Text(timeStr, style: Theme.of(context).textTheme.bodySmall),
             ],
           ),
-          Padding(padding: const EdgeInsets.only(top: 4), child: Text(post.body)),
+          if (post.body.isNotEmpty) Padding(padding: const EdgeInsets.only(top: 4), child: Text(post.body)),
+          if (post.media.isNotEmpty) Padding(padding: const EdgeInsets.only(top: 8), child: MediaGrid(media: post.media)),
         ],
       ),
     );
   }
 }
 
-class _ComposePostDialog extends StatefulWidget {
+class _ComposePostDialog extends ConsumerStatefulWidget {
   final bool isPosting;
   final TextEditingController controller;
-  final ValueChanged<String> onPost;
+  final void Function(String body, List<int> mediaIds) onPost;
 
   const _ComposePostDialog({required this.isPosting, required this.controller, required this.onPost});
 
   @override
-  State<_ComposePostDialog> createState() => _ComposePostDialogState();
+  ConsumerState<_ComposePostDialog> createState() => _ComposePostDialogState();
 }
 
-class _ComposePostDialogState extends State<_ComposePostDialog> {
+class _ComposePostDialogState extends ConsumerState<_ComposePostDialog> {
   @override
   Widget build(BuildContext context) {
+    // Watching keeps the draft alive while the dialog is open; closing the
+    // dialog (posting or cancelling) disposes it.
+    final draft = ref.watch(mediaDraftProvider(_composeDraft));
+    final mediaIds = draft.mediaIds; // null while anything is uploading or failed
+    final hasContent = widget.controller.text.trim().isNotEmpty || draft.items.isNotEmpty;
+
     return AlertDialog(
       title: const Text('New post'),
       content: Column(
         mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           TextField(
             controller: widget.controller,
@@ -164,6 +177,8 @@ class _ComposePostDialogState extends State<_ComposePostDialog> {
             decoration: const InputDecoration(labelText: "What's happening?", border: OutlineInputBorder()),
             onChanged: (_) => setState(() {}),
           ),
+          const SizedBox(height: 8),
+          const ComposerAttachments(draftKey: _composeDraft),
           const Padding(
             padding: EdgeInsets.only(top: 8),
             child: Text('Watch the snackbar after posting — that\'s the fanout cost.'),
@@ -171,12 +186,17 @@ class _ComposePostDialogState extends State<_ComposePostDialog> {
         ],
       ),
       actions: [
+        const AddImagesButton(draftKey: _composeDraft),
         TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Cancel')),
         FilledButton(
-          onPressed: widget.isPosting || widget.controller.text.trim().isEmpty
+          onPressed: widget.isPosting || !hasContent || mediaIds == null
               ? null
-              : () => widget.onPost(widget.controller.text),
-          child: Text(widget.isPosting ? 'Posting…' : 'Post'),
+              : () => widget.onPost(widget.controller.text, mediaIds),
+          child: Text(widget.isPosting
+              ? 'Posting…'
+              : draft.isUploading
+                  ? 'Uploading…'
+                  : 'Post'),
         ),
       ],
     );

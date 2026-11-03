@@ -42,8 +42,7 @@ class MediaDraftNotifier extends Notifier<MediaDraftState> {
   }
 
   /// Moves the item at [from] so it ends up at index [to] (both in the
-  /// current list). Note ReorderableListView's onReorder passes a [to] one
-  /// too high when moving down; adjust before calling.
+  /// current list), the indices ReorderableListView's onReorderItem gives.
   void move(int from, int to) {
     final items = [...state.items];
     items.insert(to, items.removeAt(from));

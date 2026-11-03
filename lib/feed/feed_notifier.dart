@@ -152,12 +152,15 @@ class FeedNotifier extends Notifier<FeedState> {
     }
   }
 
-  Future<void> publishPost(String body) async {
+  /// [mediaIds] are already uploaded (see shared_media's MediaDraftNotifier).
+  /// A post needs text, media, or both.
+  Future<void> publishPost(String body, {List<int> mediaIds = const []}) async {
     final trimmed = body.trim();
-    if (trimmed.isEmpty) return;
+    if (trimmed.isEmpty && mediaIds.isEmpty) return;
     state = state.copyWith(isPosting: true, error: null);
     try {
-      final response = await ref.read(apiServiceProvider).createPost(authorId: _userId, body: trimmed);
+      final response =
+          await ref.read(apiServiceProvider).createPost(authorId: _userId, body: trimmed, mediaIds: mediaIds);
       if (!ref.mounted) return;
       // Show it right away from the POST response. The old code refreshed
       // here instead, which usually got a feed from before the fanout and

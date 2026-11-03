@@ -113,6 +113,24 @@ void main() {
     expect(sub.read().fanoutMessage, isNull);
   });
 
+  test('publishPost sends uploaded media ids in order, and allows a post with no text', () async {
+    final (container, sub) = await open();
+
+    await container.read(feedProvider.notifier).publishPost('   ', mediaIds: [9, 4]);
+
+    expect(jsonDecode(requests.last.body), {'authorId': 1, 'body': '', 'mediaIds': [9, 4]});
+    expect(sub.read().posts.first.id, 21);
+  });
+
+  test('publishPost does nothing with neither text nor media', () async {
+    final (container, _) = await open();
+    final before = requests.length;
+
+    await container.read(feedProvider.notifier).publishPost('  ');
+
+    expect(requests.length, before);
+  });
+
   test('a refresh before the fanout lands keeps your own new post on top', () async {
     final (container, sub) = await open();
     final notifier = container.read(feedProvider.notifier);

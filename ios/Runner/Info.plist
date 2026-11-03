@@ -30,6 +30,8 @@
 	<string>Needed to join calls in a conversation.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>Needed to enable your camera during a call.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Needed to attach photos to your posts and messages.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

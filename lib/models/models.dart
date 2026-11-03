@@ -3,6 +3,8 @@
 // No code generation on purpose: the model set is small and stable, and
 // hand-written fromJson is easier to read while still on Flutter fundamentals.
 
+import 'package:shared_media/shared_media.dart';
+
 class User {
   final int id;
   final String username;
@@ -34,12 +36,16 @@ class Post {
   final int createdAt;
   final String authorUsername;
 
+  /// Images and videos, in the order the author arranged them.
+  final List<MediaAttachment> media;
+
   Post({
     required this.id,
     required this.authorId,
     required this.body,
     required this.createdAt,
     required this.authorUsername,
+    this.media = const [],
   });
 
   factory Post.fromJson(Map<String, dynamic> json) => Post(
@@ -48,6 +54,9 @@ class Post {
         body: json['body'] as String,
         createdAt: json['created_at'] as int,
         authorUsername: json['author_username'] as String,
+        media: [
+          for (final m in json['media'] as List? ?? const []) MediaAttachment.fromJson(m as Map<String, dynamic>),
+        ],
       );
 }
 

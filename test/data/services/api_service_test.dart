@@ -51,6 +51,17 @@ void main() {
     expect(jsonDecode(requests.single.body), {'authorId': 3, 'body': 'hello'});
   });
 
+  test('createPost includes media ids only when there are some', () async {
+    final (api, requests) = serviceReplying({'post': null, 'fanoutMs': 0});
+    for (final ids in [<int>[], [3, 1]]) {
+      try {
+        await api.createPost(authorId: 3, body: 'x', mediaIds: ids);
+      } catch (_) {}
+    }
+    expect(jsonDecode(requests[0].body), {'authorId': 3, 'body': 'x'});
+    expect(jsonDecode(requests[1].body), {'authorId': 3, 'body': 'x', 'mediaIds': [3, 1]});
+  });
+
   group('AppConfig.webSocketUri', () {
     test('https becomes wss', () {
       expect(config.webSocketUri(userId: 5).toString(), 'wss://example.test/ws?userId=5');

@@ -9,10 +9,12 @@ environment:
 # Deliberately no dependency on the news_feed_flutter app: an app plugs in
 # its server and logged-in user by overriding mediaApiProvider.
 dependencies:
+  cached_network_image: ^4.0.6
   flutter:
     sdk: flutter
   flutter_riverpod: ^3.4.3
   http: ^1.2.2
+  image_picker: ^1.2.4
 
 dev_dependencies:
   flutter_test:

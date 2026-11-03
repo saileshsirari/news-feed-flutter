@@ -45,11 +45,16 @@ class ApiService {
     return _decodeList(res).map((u) => User.fromJson(u as Map<String, dynamic>)).toList();
   }
 
-  Future<CreatePostResponse> createPost({required int authorId, required String body}) async {
+  /// [mediaIds] come from a ready MediaDraftState, in display order.
+  Future<CreatePostResponse> createPost({
+    required int authorId,
+    required String body,
+    List<int> mediaIds = const [],
+  }) async {
     final res = await _http.post(
       _uri('/posts'),
       headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({'authorId': authorId, 'body': body}),
+      body: jsonEncode({'authorId': authorId, 'body': body, if (mediaIds.isNotEmpty) 'mediaIds': mediaIds}),
     );
     return CreatePostResponse.fromJson(_decodeObject(res));
   }

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'data/services/media_providers.dart';
 import 'feed/login_screen.dart';
 import 'home/home_screen.dart';
 import 'session/current_user_provider.dart';
@@ -10,7 +11,7 @@ void main() {
   // global recipes; the state lives here.
   // Compose/Android: ≈ `@HiltAndroidApp` + the ViewModelStore, the container
   // that holds every singleton and ViewModel instance.
-  runApp(const ProviderScope(child: NewsFeedApp()));
+  runApp(ProviderScope(overrides: mediaOverrides, child: const NewsFeedApp()));
 }
 
 class NewsFeedApp extends StatelessWidget {
