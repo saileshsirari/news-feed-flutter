@@ -27,7 +27,13 @@ class ComposerAttachments extends ConsumerWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
+        // A definite width as well as height: some hosts (AlertDialog does)
+        // measure their content's natural width, which a scrolling list
+        // can't report, and that failed the whole dialog's layout. This
+        // takes the available width instead, so put it somewhere with a
+        // bounded width (a Column in a dialog or screen, not a Row).
         SizedBox(
+          width: double.maxFinite,
           height: tileSize,
           child: ReorderableListView.builder(
             scrollDirection: Axis.horizontal,

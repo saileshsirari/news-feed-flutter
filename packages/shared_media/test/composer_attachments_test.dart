@@ -110,4 +110,23 @@ void main() {
     expect(uploads.pending, hasLength(2));
     expect(draft().items.single.status, DraftItemStatus.uploading);
   });
+
+  testWidgets('lays out inside an AlertDialog, which measures its content\'s natural width', (tester) async {
+    container.read(mediaDraftProvider(key).notifier).add(pngMedia());
+    await tester.pumpWidget(UncontrolledProviderScope(
+      container: container,
+      child: const MaterialApp(
+        home: Scaffold(
+          body: AlertDialog(
+            title: Text('New post'),
+            content: Column(mainAxisSize: MainAxisSize.min, children: [TextField(), ComposerAttachments(draftKey: key)]),
+            actions: [AddImagesButton(draftKey: key)],
+          ),
+        ),
+      ),
+    ));
+
+    expect(tester.takeException(), isNull);
+    expect(find.byType(Image), findsOneWidget);
+  });
 }
