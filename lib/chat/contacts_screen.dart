@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../follow/follow_button.dart';
 import '../models/models.dart';
 import 'contacts_notifier.dart';
 import 'conversation_screen.dart';
@@ -137,7 +138,19 @@ class _ContactRow extends ConsumerWidget {
           : CircleAvatar(child: Text(user.username.isNotEmpty ? user.username[0].toUpperCase() : '?')),
       title: Text('@${user.username}'),
       subtitle: user.isCelebrity ? const Text('Celebrity') : null,
-      trailing: !vm.selectionMode && user.isCelebrity ? const Icon(Icons.verified, size: 18) : null,
+      // Following someone puts their posts in your feed; it's a separate
+      // thing from chatting with them, so the button sits beside the row's
+      // tap-to-chat rather than replacing it.
+      trailing: vm.selectionMode
+          ? null
+          : Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (user.isCelebrity) const Icon(Icons.verified, size: 18),
+                const SizedBox(width: 8),
+                FollowButton(userId: user.id, username: user.username),
+              ],
+            ),
       onTap: vm.selectionMode
           ? () => notifier.toggleSelected(user.id)
           : () async {

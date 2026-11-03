@@ -45,6 +45,26 @@ class ApiService {
     return _decodeList(res).map((u) => User.fromJson(u as Map<String, dynamic>)).toList();
   }
 
+  /// Ids of the users [userId] follows.
+  Future<Set<int>> getFollowing(int userId) async {
+    final res = await _http.get(_uri('/users/$userId/following'));
+    return _decodeList(res).cast<int>().toSet();
+  }
+
+  Future<void> follow({required int followerId, required int followeeId}) =>
+      _sendFollow('POST', followerId, followeeId);
+
+  Future<void> unfollow({required int followerId, required int followeeId}) =>
+      _sendFollow('DELETE', followerId, followeeId);
+
+  Future<void> _sendFollow(String method, int followerId, int followeeId) async {
+    final request = http.Request(method, _uri('/follows'))
+      ..headers['Content-Type'] = 'application/json'
+      ..body = jsonEncode({'followerId': followerId, 'followeeId': followeeId});
+    final res = await http.Response.fromStream(await _http.send(request));
+    if (res.statusCode >= 400) throw ApiException(res.statusCode, res.body);
+  }
+
   /// [mediaIds] come from a ready MediaDraftState, in display order.
   Future<CreatePostResponse> createPost({
     required int authorId,
