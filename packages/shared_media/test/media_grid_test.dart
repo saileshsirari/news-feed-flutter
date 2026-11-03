@@ -69,8 +69,24 @@ void main() {
     expect(taps, [1]);
   });
 
-  testWidgets('the default tile shows a play icon for video until playback exists', (tester) async {
-    await tester.pumpWidget(MaterialApp(home: MediaGrid(media: [attachment(1, kind: MediaKind.video)])));
-    expect(find.byIcon(Icons.play_circle_outline), findsOneWidget);
+  testWidgets('a video tile shows a play button and its length', (tester) async {
+    final video = MediaAttachment(
+      id: 1,
+      kind: MediaKind.video,
+      url: Uri.parse('https://bucket.test/1.mp4'),
+      contentType: 'video/mp4',
+      sizeBytes: 1,
+      durationMs: 75400,
+    );
+    await tester.pumpWidget(MaterialApp(home: MediaGrid(media: [video])));
+    expect(find.byIcon(Icons.play_arrow_rounded), findsOneWidget);
+    expect(find.text('1:15'), findsOneWidget);
+  });
+
+  test('formats video lengths as m:ss', () {
+    expect(formatVideoDuration(0), '0:00');
+    expect(formatVideoDuration(7400), '0:07');
+    expect(formatVideoDuration(30000), '0:30');
+    expect(formatVideoDuration(90500), '1:31');
   });
 }

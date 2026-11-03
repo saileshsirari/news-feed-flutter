@@ -5,23 +5,51 @@ import 'package:http/http.dart' as http;
 import '../models/media_attachment.dart';
 import '../models/picked_media.dart';
 
-/// Where and how to upload one file's bytes, from `POST /media/uploads`.
-class UploadTicket {
-  const UploadTicket({required this.mediaId, required this.uploadUrl, required this.method, required this.headers});
+/// A signed link to PUT one file's bytes to.
+class SignedUpload {
+  const SignedUpload({required this.uploadUrl, required this.method, required this.headers});
 
-  factory UploadTicket.fromJson(Map<String, dynamic> json) => UploadTicket(
-        mediaId: json['mediaId'] as int,
+  factory SignedUpload.fromJson(Map<String, dynamic> json) => SignedUpload(
         uploadUrl: Uri.parse(json['uploadUrl'] as String),
         method: json['method'] as String,
-        headers: (json['headers'] as Map<String, dynamic>).cast<String, String>(),
+        headers: (json['headers'] as Map).cast<String, String>(),
       );
 
-  final int mediaId;
   final Uri uploadUrl;
   final String method;
 
   /// Must be sent exactly, or the signed link is rejected.
   final Map<String, String> headers;
+}
+
+/// Where to upload one file, from `POST /media/uploads`.
+class UploadTicket extends SignedUpload {
+  const UploadTicket({
+    required this.mediaId,
+    required super.uploadUrl,
+    required super.method,
+    required super.headers,
+    this.thumbnail,
+  });
+
+  factory UploadTicket.fromJson(Map<String, dynamic> json) {
+    final file = SignedUpload.fromJson(json);
+    return UploadTicket(
+      mediaId: json['mediaId'] as int,
+      uploadUrl: file.uploadUrl,
+      method: file.method,
+      headers: file.headers,
+      thumbnail: switch (json['thumbnail']) {
+        final Map<String, dynamic> t => SignedUpload.fromJson(t),
+        _ => null,
+      },
+    );
+  }
+
+  final int mediaId;
+
+  /// Videos only: where to put the poster image, before completing.
+  final SignedUpload? thumbnail;
 }
 
 class MediaApiException implements Exception {

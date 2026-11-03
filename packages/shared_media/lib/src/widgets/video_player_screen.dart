@@ -1,0 +1,103 @@
+import 'package:flutter/material.dart';
+import 'package:video_player/video_player.dart';
+
+import '../models/media_attachment.dart';
+import 'video_tile.dart';
+
+/// Plays one video full screen: tap to pause or play, drag the bar to seek,
+/// × to close. Videos only start here, never on their own in a feed or
+/// chat, so scrolling past one costs no data.
+class VideoPlayerScreen extends StatefulWidget {
+  const VideoPlayerScreen({super.key, required this.media});
+
+  final MediaAttachment media;
+
+  static Future<void> open(BuildContext context, MediaAttachment media) => Navigator.of(context).push(
+        MaterialPageRoute(fullscreenDialog: true, builder: (_) => VideoPlayerScreen(media: media)),
+      );
+
+  @override
+  State<VideoPlayerScreen> createState() => _VideoPlayerScreenState();
+}
+
+class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
+  late final VideoPlayerController _controller = VideoPlayerController.networkUrl(widget.media.url);
+  late final Future<void> _initialized = _controller.initialize().then((_) => _controller.play());
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  /// No setState: the play badge below listens to the controller itself.
+  void _togglePlay() => _controller.value.isPlaying ? _controller.pause() : _controller.play();
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: SafeArea(
+        child: Stack(
+          children: [
+            Center(
+              child: FutureBuilder(
+                future: _initialized,
+                builder: (context, snapshot) {
+                  if (snapshot.hasError) {
+                    return const Text('Couldn\'t play this video', style: TextStyle(color: Colors.white70));
+                  }
+                  if (snapshot.connectionState != ConnectionState.done) {
+                    return const CircularProgressIndicator(color: Colors.white);
+                  }
+                  return GestureDetector(
+                    onTap: _togglePlay,
+                    child: AspectRatio(
+                      aspectRatio: _controller.value.aspectRatio,
+                      child: Stack(
+                        alignment: Alignment.center,
+                        children: [
+                          VideoPlayer(_controller),
+                          // Rebuilds as playback starts, stops and ends.
+                          ValueListenableBuilder(
+                            valueListenable: _controller,
+                            builder: (_, value, _) => value.isPlaying ? const SizedBox.shrink() : const PlayBadge(size: 64),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+            Positioned(
+              top: 4,
+              left: 4,
+              child: IconButton(
+                icon: const Icon(Icons.close, color: Colors.white),
+                tooltip: 'Close',
+                onPressed: () => Navigator.of(context).pop(),
+              ),
+            ),
+            Positioned(
+              left: 12,
+              right: 12,
+              bottom: 12,
+              child: FutureBuilder(
+                future: _initialized,
+                builder: (context, snapshot) => snapshot.connectionState == ConnectionState.done && !snapshot.hasError
+                    ? VideoProgressIndicator(
+                        _controller,
+                        allowScrubbing: true,
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        colors: const VideoProgressColors(playedColor: Colors.white, bufferedColor: Colors.white38),
+                      )
+                    : const SizedBox.shrink(),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}

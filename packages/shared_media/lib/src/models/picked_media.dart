@@ -12,7 +12,19 @@ class PickedMedia {
     this.width,
     this.height,
     this.durationMs,
-  });
+    this.thumbnail,
+  }) : _declaredSizeBytes = null;
+
+  /// A file too big to upload, recorded by size only: reading a long phone
+  /// video into memory just to reject it could run the app out of memory.
+  /// MediaLimits turns it into a "too large" message.
+  PickedMedia.tooLarge({required this.contentType, required int sizeBytes})
+      : bytes = Uint8List(0),
+        width = null,
+        height = null,
+        durationMs = null,
+        thumbnail = null,
+        _declaredSizeBytes = sizeBytes;
 
   final Uint8List bytes;
   final String contentType;
@@ -20,7 +32,13 @@ class PickedMedia {
   final int? height;
   final int? durationMs;
 
-  int get sizeBytes => bytes.length;
+  /// A video's JPEG poster, made on the device; null for images, or if one
+  /// couldn't be made.
+  final Uint8List? thumbnail;
+
+  final int? _declaredSizeBytes;
+
+  int get sizeBytes => _declaredSizeBytes ?? bytes.length;
 
   MediaKind? get kind => switch (contentType.split('/').first) {
         'image' => MediaKind.image,

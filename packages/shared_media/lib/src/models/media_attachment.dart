@@ -17,6 +17,7 @@ class MediaAttachment {
     this.width,
     this.height,
     this.durationMs,
+    this.thumbnailUrl,
   });
 
   factory MediaAttachment.fromJson(Map<String, dynamic> json) => MediaAttachment(
@@ -28,6 +29,7 @@ class MediaAttachment {
         width: json['width'] as int?,
         height: json['height'] as int?,
         durationMs: json['durationMs'] as int?,
+        thumbnailUrl: switch (json['thumbnailUrl']) { final String url => Uri.parse(url), _ => null },
       );
 
   final int id;
@@ -38,6 +40,9 @@ class MediaAttachment {
   final int? width;
   final int? height;
   final int? durationMs;
+
+  /// A video's poster image; null for images, or a video uploaded without one.
+  final Uri? thumbnailUrl;
 
   /// Width / height, for reserving space before the image loads; null if unknown.
   double? get aspectRatio => (width != null && height != null && height! > 0) ? width! / height! : null;

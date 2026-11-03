@@ -27,7 +27,7 @@ class FakePicker implements MediaPicker {
   int? lastLimit;
 
   @override
-  Future<List<PickedMedia>> pickImages({required int limit}) async {
+  Future<List<PickedMedia>> pickMedia({required int limit}) async {
     lastLimit = limit;
     return [pngMedia(), pngMedia()];
   }
@@ -55,7 +55,7 @@ void main() {
         container: container,
         child: const MaterialApp(
           home: Scaffold(
-            body: Column(children: [AddImagesButton(draftKey: key), ComposerAttachments(draftKey: key)]),
+            body: Column(children: [AddMediaButton(draftKey: key), ComposerAttachments(draftKey: key)]),
           ),
         ),
       ));
@@ -120,7 +120,7 @@ void main() {
           body: AlertDialog(
             title: Text('New post'),
             content: Column(mainAxisSize: MainAxisSize.min, children: [TextField(), ComposerAttachments(draftKey: key)]),
-            actions: [AddImagesButton(draftKey: key)],
+            actions: [AddMediaButton(draftKey: key)],
           ),
         ),
       ),

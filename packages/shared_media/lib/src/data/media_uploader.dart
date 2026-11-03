@@ -13,8 +13,8 @@ class UploadFailedException implements Exception {
   String toString() => 'UploadFailedException($statusCode)';
 }
 
-/// Sends a file's bytes straight to the bucket using an [UploadTicket]'s
-/// signed link. Knows nothing about our API server.
+/// Sends a file's bytes straight to the bucket using a signed link (an
+/// [UploadTicket], or its thumbnail's). Knows nothing about our API server.
 class MediaUploader {
   /// Pass [httpClient] to force the package:http path (tests do, on any
   /// platform). Otherwise a browser uses XMLHttpRequest, for real progress.
@@ -25,7 +25,7 @@ class MediaUploader {
   final int chunkSize;
 
   /// [onProgress] gets 0..1 as the file goes out.
-  Future<void> upload(UploadTicket ticket, Uint8List bytes, {void Function(double progress)? onProgress}) async {
+  Future<void> upload(SignedUpload ticket, Uint8List bytes, {void Function(double progress)? onProgress}) async {
     final status = kIsWeb && _injectedHttp == null
         ? await browserUpload(ticket.uploadUrl, ticket.method, ticket.headers, bytes, onProgress)
         : await _uploadWithHttp(ticket, bytes, onProgress);
@@ -35,7 +35,7 @@ class MediaUploader {
   /// Progress here is bytes handed to the connection, which on mobile and
   /// desktop tracks what's actually sent closely enough.
   Future<int> _uploadWithHttp(
-    UploadTicket ticket,
+    SignedUpload ticket,
     Uint8List bytes,
     void Function(double progress)? onProgress,
   ) async {

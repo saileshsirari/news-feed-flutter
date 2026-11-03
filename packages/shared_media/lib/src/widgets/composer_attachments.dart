@@ -5,6 +5,7 @@ import '../draft/media_draft.dart';
 import '../draft/media_draft_notifier.dart';
 import '../models/media_attachment.dart';
 import '../providers.dart';
+import 'video_tile.dart';
 
 /// The row of attached files in a composer: drag to reorder, × to remove,
 /// a progress ring while uploading, tap a failed one to retry. Shows
@@ -88,9 +89,7 @@ class _AttachmentTile extends StatelessWidget {
         child: Stack(
           fit: StackFit.expand,
           children: [
-            item.source.kind == MediaKind.image
-                ? Image.memory(item.source.bytes, fit: BoxFit.cover, gaplessPlayback: true)
-                : const ColoredBox(color: Colors.black87, child: Icon(Icons.videocam, color: Colors.white)),
+            _Preview(item),
             if (item.status == DraftItemStatus.uploading)
               ColoredBox(
                 color: Colors.black38,
@@ -136,10 +135,35 @@ class _AttachmentTile extends StatelessWidget {
   }
 }
 
-/// Opens the photo library and adds what's picked to the draft, up to the
-/// draft's limit. Disabled once the draft is full.
-class AddImagesButton extends ConsumerWidget {
-  const AddImagesButton({super.key, required this.draftKey});
+/// The picked file itself: the photo, or a video's poster (made on the
+/// device) with its length.
+class _Preview extends StatelessWidget {
+  const _Preview(this.item);
+
+  final DraftItem item;
+
+  @override
+  Widget build(BuildContext context) {
+    final source = item.source;
+    if (source.kind == MediaKind.image) return Image.memory(source.bytes, fit: BoxFit.cover, gaplessPlayback: true);
+    final poster = source.thumbnail;
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        poster != null
+            ? Image.memory(poster, fit: BoxFit.cover, gaplessPlayback: true)
+            : const ColoredBox(color: Colors.black87, child: Icon(Icons.videocam, color: Colors.white)),
+        if (source.durationMs != null)
+          Positioned(left: 4, bottom: 4, child: DurationBadge(milliseconds: source.durationMs!)),
+      ],
+    );
+  }
+}
+
+/// Opens the gallery for photos and videos and adds what's picked to the
+/// draft, up to the draft's limit. Disabled once the draft is full.
+class AddMediaButton extends ConsumerWidget {
+  const AddMediaButton({super.key, required this.draftKey});
 
   final MediaDraftKey draftKey;
 
@@ -147,13 +171,13 @@ class AddImagesButton extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final draft = ref.watch(mediaDraftProvider(draftKey));
     return IconButton(
-      tooltip: draft.isFull ? 'At most ${draft.maxItems} files' : 'Add photos',
+      tooltip: draft.isFull ? 'At most ${draft.maxItems} files' : 'Add photos or videos',
       icon: const Icon(Icons.add_photo_alternate_outlined),
       onPressed: draft.isFull
           ? null
           : () async {
               final notifier = ref.read(mediaDraftProvider(draftKey).notifier);
-              final picked = await ref.read(mediaPickerProvider).pickImages(limit: draft.maxItems - draft.items.length);
+              final picked = await ref.read(mediaPickerProvider).pickMedia(limit: draft.maxItems - draft.items.length);
               picked.forEach(notifier.add);
             },
     );

@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../models/media_attachment.dart';
 import 'media_image.dart';
+import 'video_player_screen.dart';
+import 'video_tile.dart';
 
 /// A post's or message's attachments, laid out like most social apps:
 /// one file at its own shape, two side by side, three as one large and two
@@ -11,7 +13,8 @@ class MediaGrid extends StatelessWidget {
 
   final List<MediaAttachment> media;
 
-  /// Called with the tapped file's index in [media].
+  /// Called with the tapped file's index in [media]. Left null, tapping a
+  /// video plays it full screen and tapping an image does nothing.
   final ValueChanged<int>? onTap;
 
   /// How one file is drawn; tests swap it to avoid network images.
@@ -22,8 +25,7 @@ class MediaGrid extends StatelessWidget {
 
   static Widget defaultTile(MediaAttachment media) => switch (media.kind) {
         MediaKind.image => MediaImage(media),
-        // Played in phase 4; until then, just show that it's a video.
-        MediaKind.video => const _VideoPlaceholder(),
+        MediaKind.video => VideoTile(media),
       };
 
   @override
@@ -31,7 +33,7 @@ class MediaGrid extends StatelessWidget {
     if (media.isEmpty) return const SizedBox.shrink();
     return ClipRRect(
       borderRadius: BorderRadius.circular(12),
-      child: AspectRatio(aspectRatio: _aspectRatio(), child: _layout()),
+      child: AspectRatio(aspectRatio: _aspectRatio(), child: _layout(context)),
     );
   }
 
@@ -42,25 +44,32 @@ class MediaGrid extends StatelessWidget {
     return (media.first.aspectRatio ?? 4 / 3).clamp(3 / 4, 1.91);
   }
 
-  Widget _layout() {
+  Widget _layout(BuildContext context) {
+    Widget tile(int index, {int hiddenCount = 0}) => _tile(context, index, hiddenCount: hiddenCount);
     switch (media.length) {
       case 1:
-        return _tile(0);
+        return tile(0);
       case 2:
-        return _row([_tile(0), _tile(1)]);
+        return _row([tile(0), tile(1)]);
       case 3:
-        return _row([_tile(0), _column([_tile(1), _tile(2)])]);
+        return _row([tile(0), _column([tile(1), tile(2)])]);
       default:
         return _column([
-          _row([_tile(0), _tile(1)]),
-          _row([_tile(2), _tile(3, hiddenCount: media.length - _maxTiles)]),
+          _row([tile(0), tile(1)]),
+          _row([tile(2), tile(3, hiddenCount: media.length - _maxTiles)]),
         ]);
     }
   }
 
-  Widget _tile(int index, {int hiddenCount = 0}) {
+  VoidCallback? _onTapFor(BuildContext context, int index) {
+    if (onTap != null) return () => onTap!(index);
+    if (media[index].kind == MediaKind.video) return () => VideoPlayerScreen.open(context, media[index]);
+    return null;
+  }
+
+  Widget _tile(BuildContext context, int index, {int hiddenCount = 0}) {
     return GestureDetector(
-      onTap: onTap == null ? null : () => onTap!(index),
+      onTap: _onTapFor(context, index),
       child: Stack(
         fit: StackFit.expand,
         children: [
@@ -93,14 +102,4 @@ class MediaGrid extends StatelessWidget {
   static List<Widget> _spaced(List<Widget> children, Widget gap) => [
         for (var i = 0; i < children.length; i++) ...[if (i > 0) gap, Expanded(child: children[i])],
       ];
-}
-
-class _VideoPlaceholder extends StatelessWidget {
-  const _VideoPlaceholder();
-
-  @override
-  Widget build(BuildContext context) => const ColoredBox(
-        color: Colors.black87,
-        child: Center(child: Icon(Icons.play_circle_outline, color: Colors.white, size: 48)),
-      );
 }

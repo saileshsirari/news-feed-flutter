@@ -186,7 +186,7 @@ class _ComposePostDialogState extends ConsumerState<_ComposePostDialog> {
         ],
       ),
       actions: [
-        const AddImagesButton(draftKey: _composeDraft),
+        const AddMediaButton(draftKey: _composeDraft),
         TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Cancel')),
         FilledButton(
           onPressed: widget.isPosting || !hasContent || mediaIds == null
