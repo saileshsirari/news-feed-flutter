@@ -32,27 +32,46 @@ class MediaUploader {
     if (status < 200 || status >= 300) throw UploadFailedException(status);
   }
 
-  /// Progress here is bytes handed to the connection, which on mobile and
-  /// desktop tracks what's actually sent closely enough.
   Future<int> _uploadWithHttp(
     SignedUpload ticket,
     Uint8List bytes,
     void Function(double progress)? onProgress,
   ) async {
-    final request = http.StreamedRequest(ticket.method, ticket.uploadUrl)
-      ..headers.addAll(ticket.headers)
-      ..contentLength = bytes.length;
-
-    final response = _http.send(request);
-    for (var start = 0; start < bytes.length; start += chunkSize) {
-      final end = start + chunkSize < bytes.length ? start + chunkSize : bytes.length;
-      request.sink.add(bytes.sublist(start, end));
-      onProgress?.call(end / bytes.length);
-    }
-    await request.sink.close();
-
-    final result = await response;
+    final request = _ProgressRequest(ticket, bytes, chunkSize, onProgress);
+    final result = await _http.send(request);
     await result.stream.drain<void>();
     return result.statusCode;
+  }
+}
+
+/// A PUT whose body is pulled a chunk at a time, reporting progress as each
+/// chunk is taken. The connection only takes the next chunk once it has
+/// room to send it, so progress follows what has actually gone out —
+/// pushing every chunk in at once (as http.StreamedRequest invites) would
+/// report 100% before the upload had really started.
+class _ProgressRequest extends http.BaseRequest {
+  _ProgressRequest(SignedUpload ticket, this._bytes, this._chunkSize, this._onProgress)
+      : super(ticket.method, ticket.uploadUrl) {
+    headers.addAll(ticket.headers);
+    contentLength = _bytes.length;
+  }
+
+  final Uint8List _bytes;
+  final int _chunkSize;
+  final void Function(double progress)? _onProgress;
+
+  @override
+  http.ByteStream finalize() {
+    super.finalize();
+    return http.ByteStream(_chunks());
+  }
+
+  Stream<List<int>> _chunks() async* {
+    for (var start = 0; start < _bytes.length; start += _chunkSize) {
+      final end = start + _chunkSize < _bytes.length ? start + _chunkSize : _bytes.length;
+      yield Uint8List.sublistView(_bytes, start, end);
+      // Resumes only when the connection asks for more, i.e. this chunk is on its way.
+      _onProgress?.call(end / _bytes.length);
+    }
   }
 }

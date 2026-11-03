@@ -91,24 +91,7 @@ class _AttachmentTile extends StatelessWidget {
           children: [
             _Preview(item),
             if (item.status == DraftItemStatus.preparing || item.status == DraftItemStatus.uploading)
-              ColoredBox(
-                color: Colors.black38,
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    CircularProgressIndicator(
-                      // Indeterminate until the first progress comes in.
-                      value: item.progress > 0 ? item.progress : null,
-                      color: Colors.white,
-                    ),
-                    if (item.status == DraftItemStatus.preparing)
-                      const Padding(
-                        padding: EdgeInsets.only(top: 4),
-                        child: Text('Compressing', style: TextStyle(color: Colors.white, fontSize: 11)),
-                      ),
-                  ],
-                ),
-              ),
+              _ProgressOverlay(item),
             if (item.status == DraftItemStatus.failed)
               Material(
                 color: colors.error.withValues(alpha: 0.6),
@@ -138,6 +121,43 @@ class _AttachmentTile extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// A ring with the percentage inside and what's happening under it, over a
+/// file that's being compressed or uploaded.
+class _ProgressOverlay extends StatelessWidget {
+  const _ProgressOverlay(this.item);
+
+  final DraftItem item;
+
+  @override
+  Widget build(BuildContext context) {
+    // Indeterminate until the first progress comes in.
+    final progress = item.progress > 0 ? item.progress : null;
+    const white = TextStyle(color: Colors.white, fontSize: 11, fontFeatures: [FontFeature.tabularFigures()]);
+    return ColoredBox(
+      color: Colors.black45,
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          SizedBox.square(
+            dimension: 40,
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                CircularProgressIndicator(value: progress, color: Colors.white, strokeWidth: 3),
+                if (progress != null) Text('${(progress * 100).floor()}%', style: white),
+              ],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Text(item.status == DraftItemStatus.preparing ? 'Compressing' : 'Uploading', style: white),
+          ),
+        ],
       ),
     );
   }

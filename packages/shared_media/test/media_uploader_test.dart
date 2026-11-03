@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -39,5 +40,42 @@ void main() {
       uploader.upload(ticket, Uint8List(3)),
       throwsA(isA<UploadFailedException>().having((e) => e.statusCode, 'statusCode', 403)),
     );
+  });
+
+  test('progress follows what a slow connection has actually received', () async {
+    // A real socket to a server that reads slowly, so the upload has to
+    // wait for it: progress must not run far ahead of what's arrived.
+    const total = 48 * 1024 * 1024;
+    var received = 0;
+    final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+    addTearDown(() => server.close(force: true));
+    server.listen((request) async {
+      final subscription = request.listen(null);
+      subscription.onData((chunk) {
+        received += chunk.length;
+        subscription.pause(Future.delayed(const Duration(milliseconds: 2)));
+      });
+      await subscription.asFuture<void>();
+      request.response.statusCode = 200;
+      await request.response.close();
+    });
+
+    final aheadBy = <double>[];
+    await MediaUploader(httpClient: http.Client()).upload(
+      UploadTicket(
+        mediaId: 1,
+        uploadUrl: Uri.parse('http://127.0.0.1:${server.port}/put'),
+        method: 'PUT',
+        headers: const {'Content-Type': 'video/mp4'},
+      ),
+      Uint8List(total),
+      onProgress: (p) => aheadBy.add(p - received / total),
+    );
+
+    expect(received, total);
+    expect(aheadBy.length, greaterThan(100));
+    // Socket buffers (a few MB, more under load) let it run somewhat ahead;
+    // pushing everything in at once was 100% ahead before anything arrived.
+    expect(aheadBy.reduce((a, b) => a > b ? a : b), lessThan(0.6));
   });
 }

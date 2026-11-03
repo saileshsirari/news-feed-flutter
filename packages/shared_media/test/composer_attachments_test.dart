@@ -14,11 +14,13 @@ PickedMedia pngMedia() => PickedMedia(bytes: png, contentType: 'image/png', widt
 
 class FakeUploadService implements MediaUploadService {
   final pending = <Completer<MediaAttachment>>[];
+  final progress = <void Function(double)>[];
 
   @override
   Future<MediaAttachment> upload(PickedMedia media, {void Function(double progress)? onProgress}) {
     final completer = Completer<MediaAttachment>();
     pending.add(completer);
+    if (onProgress != null) progress.add(onProgress);
     return completer.future;
   }
 }
@@ -128,5 +130,16 @@ void main() {
 
     expect(tester.takeException(), isNull);
     expect(find.byType(Image), findsOneWidget);
+  });
+
+  testWidgets('shows what stage a file is at, and how far along', (tester) async {
+    container.read(mediaDraftProvider(key).notifier).add(pngMedia());
+    await pump(tester);
+    expect(find.text('Uploading'), findsOneWidget);
+    expect(find.textContaining('%'), findsNothing); // nothing sent yet
+
+    uploads.progress.single(0.425);
+    await tester.pump();
+    expect(find.text('42%'), findsOneWidget);
   });
 }
