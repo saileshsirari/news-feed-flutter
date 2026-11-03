@@ -162,6 +162,7 @@ class _ContactRow extends ConsumerWidget {
                   builder: (_) => ConversationScreen(
                     conversationId: conversationId,
                     title: '@${user.username}',
+                    otherUserId: user.id,
                   ),
                 ),
               );

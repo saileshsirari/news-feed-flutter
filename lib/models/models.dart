@@ -118,6 +118,9 @@ class ConversationSummary {
   /// The other participant's username — only set for a 1:1 conversation;
   /// null for groups, which use [name] as their title instead.
   final String? otherUsername;
+
+  /// Same, the other participant's id, for their presence; null for groups.
+  final int? otherUserId;
   final String? lastMessageBody;
   final int? lastMessageCreatedAt;
   final int unreadCount;
@@ -127,6 +130,7 @@ class ConversationSummary {
     required this.isGroup,
     this.name,
     this.otherUsername,
+    this.otherUserId,
     this.lastMessageBody,
     this.lastMessageCreatedAt,
     required this.unreadCount,
@@ -142,6 +146,7 @@ class ConversationSummary {
         isGroup: json['is_group'] as bool,
         name: json['name'] as String?,
         otherUsername: json['other_username'] as String?,
+        otherUserId: json['other_user_id'] as int?,
         lastMessageBody: json['last_message_body'] as String?,
         lastMessageCreatedAt: json['last_message_created_at'] as int?,
         unreadCount: json['unread_count'] as int,
@@ -219,4 +224,21 @@ class MessagePage {
         messages: (json['messages'] as List).map((m) => ChatMessage.fromJson(m as Map<String, dynamic>)).toList(),
         nextCursor: json['nextCursor'] as String?,
       );
+}
+
+/// Whether someone is online now, or when they last were.
+class Presence {
+  const Presence({required this.userId, required this.online, this.lastSeenAt});
+
+  factory Presence.fromJson(Map<String, dynamic> json) => Presence(
+        userId: json['userId'] as int,
+        online: json['online'] as bool,
+        lastSeenAt: json['lastSeenAt'] as int?,
+      );
+
+  final int userId;
+  final bool online;
+
+  /// Milliseconds since epoch; null if online, or never seen.
+  final int? lastSeenAt;
 }

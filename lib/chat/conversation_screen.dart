@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../presence/presence_widgets.dart';
 import '../call/call_screen.dart';
 import '../session/current_user_provider.dart';
 import '../models/models.dart';
@@ -17,7 +18,11 @@ class ConversationScreen extends ConsumerStatefulWidget {
   final int conversationId;
   final String title;
 
-  const ConversationScreen({super.key, required this.conversationId, required this.title});
+  /// The other person in a 1:1, for "online" / "last seen" under the title;
+  /// null for a group.
+  final int? otherUserId;
+
+  const ConversationScreen({super.key, required this.conversationId, required this.title, this.otherUserId});
 
   @override
   ConsumerState<ConversationScreen> createState() => _ConversationScreenState();
@@ -51,7 +56,14 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.title),
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(widget.title),
+            if (widget.otherUserId != null) PresenceSubtitle(userId: widget.otherUserId!),
+          ],
+        ),
         actions: [
           IconButton(
             icon: const Icon(Icons.call),

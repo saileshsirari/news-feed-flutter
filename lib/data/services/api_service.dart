@@ -131,6 +131,11 @@ class ApiService {
     return ChatMessage.fromJson(_decodeObject(res));
   }
 
+  Future<List<Presence>> getPresence(Iterable<int> userIds) async {
+    final res = await _http.get(_uri('/presence', {'userIds': userIds.join(',')}));
+    return _decodeList(res).map((p) => Presence.fromJson(p as Map<String, dynamic>)).toList();
+  }
+
   Future<List<ReadState>> getReadStates(int conversationId, int userId) async {
     final res = await _http.get(_uri('/conversations/$conversationId/reads', {'userId': userId}));
     return _decodeList(res).map((r) => ReadState.fromJson(r as Map<String, dynamic>)).toList();

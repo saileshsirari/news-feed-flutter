@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/models.dart';
 import 'contacts_screen.dart';
+import '../presence/presence_widgets.dart';
 import 'conversations_notifier.dart';
 import 'conversation_screen.dart';
 
@@ -73,10 +74,11 @@ class _ConversationRow extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final title = conversation.displayTitle();
+    final avatar = CircleAvatar(child: Icon(conversation.isGroup ? Icons.group : Icons.person));
+    final otherUserId = conversation.otherUserId;
     return ListTile(
-      leading: CircleAvatar(
-        child: Icon(conversation.isGroup ? Icons.group : Icons.person),
-      ),
+      // Presence for 1:1s only; groups ask when opened, not per row.
+      leading: otherUserId == null ? avatar : OnlineDot(userId: otherUserId, child: avatar),
       title: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis),
       subtitle: conversation.lastMessageBody != null
           ? Text(conversation.lastMessageBody!, maxLines: 1, overflow: TextOverflow.ellipsis)
@@ -97,7 +99,7 @@ class _ConversationRow extends ConsumerWidget {
         final notifier = ref.read(conversationsProvider.notifier);
         await Navigator.of(context).push(
           MaterialPageRoute(
-            builder: (_) => ConversationScreen(conversationId: conversation.id, title: title),
+            builder: (_) => ConversationScreen(conversationId: conversation.id, title: title, otherUserId: otherUserId),
           ),
         );
         notifier.load();
