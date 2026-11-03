@@ -1,0 +1,20 @@
+name: shared_media
+description: Picking, uploading and showing images and video, shared by the feed and chat (and any future app split out of them).
+publish_to: 'none'
+version: 0.1.0
+
+environment:
+  sdk: ^3.13.4
+
+# Deliberately no dependency on the news_feed_flutter app: an app plugs in
+# its server and logged-in user by overriding mediaApiProvider.
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_riverpod: ^3.4.3
+  http: ^1.2.2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0

@@ -36,6 +36,9 @@ dependencies:
   cupertino_icons: ^1.0.8
 
   http: ^1.2.2
+  # Images and video, shared with any future split-out chat app.
+  shared_media:
+    path: packages/shared_media
   web_socket_channel: ^3.0.1
   shared_preferences: ^2.3.3
   # All app state: services, current user, socket, and every screen's
