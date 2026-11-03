@@ -4,10 +4,12 @@ import 'package:flutter/foundation.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../models/picked_media.dart';
+import '../processing/image_shrinker.dart';
 
 /// Opens the photo library and returns the chosen images, already shrunk
-/// for upload. image_picker does the resizing and JPEG compression itself
-/// (on web too, via a canvas), so there's no separate compression step.
+/// for upload: image_picker resizes them and recompresses JPEGs (on web
+/// too, via a canvas), and ImageShrinker turns large PNGs into JPEGs,
+/// which image_picker leaves alone.
 class MediaPicker {
   MediaPicker({ImagePicker? imagePicker}) : _picker = imagePicker ?? ImagePicker();
 
@@ -37,12 +39,12 @@ class MediaPicker {
   static Future<PickedMedia> _toPickedMedia(XFile file) async {
     final bytes = await file.readAsBytes();
     final size = await _imageSize(bytes);
-    return PickedMedia(
+    return ImageShrinker.shrink(PickedMedia(
       bytes: bytes,
       contentType: contentTypeFor(file.name, file.mimeType),
       width: size?.$1,
       height: size?.$2,
-    );
+    ));
   }
 
   /// Width and height, for laying out the image before it loads; null if
