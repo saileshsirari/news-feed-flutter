@@ -96,16 +96,11 @@ void main() {
     expect(uploader.uploads, [(videoUrl, 100)]);
   });
 
-  test('accepts iPhone .mov videos and rejects oversized ones without loading them', () {
+  test('accepts iPhone .mov videos', () {
     expect(MediaPicker.contentTypeFor('IMG_0042.MOV', null), 'video/quicktime');
     expect(
       MediaLimits.problemWith(PickedMedia(bytes: Uint8List(10), contentType: 'video/quicktime', durationMs: 4000)),
       isNull,
     );
-
-    final huge = PickedMedia.tooLarge(contentType: 'video/mp4', sizeBytes: 300 * 1024 * 1024);
-    expect(huge.bytes, isEmpty);
-    expect(huge.sizeBytes, 300 * 1024 * 1024);
-    expect(MediaLimits.problemWith(huge), 'Videos can be at most 50 MB');
   });
 }

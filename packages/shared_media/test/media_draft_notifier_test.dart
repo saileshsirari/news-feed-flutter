@@ -30,15 +30,43 @@ class FakeUploadService implements MediaUploadService {
 
 PickedMedia image([int size = 10]) => PickedMedia(bytes: Uint8List(size), contentType: 'image/jpeg');
 
+/// Compresses to [resultBytes] bytes, once the test completes it.
+class FakePreparer implements VideoPreparer {
+  FakePreparer(this.resultBytes);
+
+  final int resultBytes;
+  final pending = <(void Function(double)?, Completer<void>)>[];
+  int calls = 0;
+
+  @override
+  Future<PickedMedia> prepare(PickedMedia media, {void Function(double progress)? onProgress}) async {
+    calls++;
+    final done = Completer<void>();
+    pending.add((onProgress, done));
+    await done.future;
+    return PickedMedia(bytes: Uint8List(resultBytes), contentType: 'video/mp4', durationMs: media.durationMs);
+  }
+}
+
+PickedMedia phoneVideo() =>
+    PickedMedia.notLoaded(sourcePath: '/v.mp4', contentType: 'video/mp4', sizeBytes: 42 * 1024 * 1024, durationMs: 20000);
+
 void main() {
   late FakeUploadService uploads;
+  late FakePreparer preparer;
   late ProviderContainer container;
   const feed = (id: 'feed', maxItems: 3);
 
-  setUp(() {
+  void makeContainer({int compressedBytes = 9 * 1024 * 1024}) {
     uploads = FakeUploadService();
-    container = ProviderContainer.test(overrides: [mediaUploadServiceProvider.overrideWithValue(uploads)]);
-  });
+    preparer = FakePreparer(compressedBytes);
+    container = ProviderContainer.test(overrides: [
+      mediaUploadServiceProvider.overrideWithValue(uploads),
+      videoPreparerProvider.overrideWithValue(preparer),
+    ]);
+  }
+
+  setUp(makeContainer);
 
   (MediaDraftNotifier, ProviderSubscription<MediaDraftState>) open(MediaDraftKey key) {
     final sub = container.listen(mediaDraftProvider(key), (_, _) {});
@@ -143,5 +171,58 @@ void main() {
     await pumpEventQueue();
     draft.clear();
     expect(sub.read().isEmpty, isTrue);
+  });
+
+  test('a phone video is compressed first, then the compressed file is uploaded', () async {
+    final (draft, sub) = open(feed);
+    draft.add(phoneVideo());
+
+    expect(sub.read().items.single.status, DraftItemStatus.preparing);
+    expect(sub.read().isPreparing, isTrue);
+    expect(uploads.pending, isEmpty);
+
+    preparer.pending.single.$1!(0.6);
+    expect(sub.read().items.single.progress, 0.6);
+
+    preparer.pending.single.$2.complete();
+    await pumpEventQueue();
+    expect(sub.read().items.single.status, DraftItemStatus.uploading);
+    expect(uploads.pending.single.$1.sizeBytes, 9 * 1024 * 1024); // the compressed bytes, not the 42 MB original
+
+    uploads.finish(0);
+    await pumpEventQueue();
+    expect(sub.read().mediaIds, [100]);
+  });
+
+  test('a video still over 50 MB after compressing fails without uploading', () async {
+    makeContainer(compressedBytes: 60 * 1024 * 1024);
+    final (draft, sub) = open(feed);
+    draft.add(phoneVideo());
+    preparer.pending.single.$2.complete();
+    await pumpEventQueue();
+
+    expect(sub.read().items.single.status, DraftItemStatus.failed);
+    expect(sub.read().items.single.error, contains('after compressing'));
+    expect(uploads.pending, isEmpty);
+  });
+
+  test('retrying a failed upload doesn\'t compress again', () async {
+    final (draft, sub) = open(feed);
+    draft.add(phoneVideo());
+    preparer.pending.single.$2.complete();
+    await pumpEventQueue();
+    uploads.fail(0);
+    await pumpEventQueue();
+
+    draft.retry(sub.read().items.single.localId);
+    expect(sub.read().items.single.status, DraftItemStatus.uploading);
+    expect(preparer.calls, 1);
+  });
+
+  test('a video over 30 seconds fails at once, without compressing', () {
+    final (draft, sub) = open(feed);
+    draft.add(PickedMedia.notLoaded(sourcePath: '/v.mp4', contentType: 'video/mp4', sizeBytes: 1024, durationMs: 31000));
+    expect(sub.read().items.single.status, DraftItemStatus.failed);
+    expect(preparer.calls, 0);
   });
 }

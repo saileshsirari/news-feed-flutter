@@ -6,7 +6,13 @@ import '../models/picked_media.dart';
 /// A record, so two equal keys find the same draft.
 typedef MediaDraftKey = ({String id, int maxItems});
 
-enum DraftItemStatus { uploading, ready, failed }
+enum DraftItemStatus {
+  /// Being compressed on the device (phone videos), before uploading.
+  preparing,
+  uploading,
+  ready,
+  failed,
+}
 
 /// One picked file in a composer, from upload start to ready (or failed).
 class DraftItem {
@@ -26,14 +32,21 @@ class DraftItem {
   final PickedMedia source;
   final DraftItemStatus status;
 
-  /// 0..1 while uploading.
+  /// 0..1 while preparing, and again while uploading.
   final double progress;
   final MediaAttachment? uploaded;
   final String? error;
 
-  DraftItem copyWith({DraftItemStatus? status, double? progress, MediaAttachment? uploaded, String? error}) => DraftItem(
+  DraftItem copyWith({
+    PickedMedia? source,
+    DraftItemStatus? status,
+    double? progress,
+    MediaAttachment? uploaded,
+    String? error,
+  }) =>
+      DraftItem(
         localId: localId,
-        source: source,
+        source: source ?? this.source,
         status: status ?? this.status,
         progress: progress ?? this.progress,
         uploaded: uploaded ?? this.uploaded,
@@ -50,12 +63,13 @@ class MediaDraftState {
 
   bool get isEmpty => items.isEmpty;
   bool get isFull => items.length >= maxItems;
+  bool get isPreparing => items.any((i) => i.status == DraftItemStatus.preparing);
   bool get isUploading => items.any((i) => i.status == DraftItemStatus.uploading);
   bool get hasFailures => items.any((i) => i.status == DraftItemStatus.failed);
 
   /// The ids to send with the post or message, in order — or null while
-  /// anything is still uploading or has failed, since sending then would
-  /// silently drop those files.
+  /// anything is still being prepared, uploading, or has failed, since
+  /// sending then would silently drop those files.
   List<int>? get mediaIds =>
       items.every((i) => i.status == DraftItemStatus.ready) ? [for (final i in items) i.uploaded!.id] : null;
 

@@ -11,8 +11,10 @@ import '../processing/video_probe.dart';
 /// Opens the gallery for photos and videos together and returns them ready
 /// for upload. Photos are shrunk: image_picker resizes them and recompresses
 /// JPEGs (on web too, via a canvas), and ImageShrinker turns large PNGs into
-/// JPEGs, which image_picker leaves alone. Videos are uploaded as recorded,
-/// with their length, size and a poster image read on the device.
+/// JPEGs, which image_picker leaves alone. For videos it reads their length,
+/// size and a poster image on the device; on phones they stay a path until
+/// VideoPreparer compresses and loads them, while the browser (which can't
+/// compress) loads them here.
 class MediaPicker {
   MediaPicker({ImagePicker? imagePicker}) : _picker = imagePicker ?? ImagePicker();
 
@@ -53,13 +55,25 @@ class MediaPicker {
 
   static Future<PickedMedia> _video(XFile file, String contentType) async {
     final sizeBytes = await file.length();
-    if (sizeBytes > MediaLimits.maxVideoBytes) {
-      return PickedMedia.tooLarge(contentType: contentType, sizeBytes: sizeBytes);
-    }
+    // Probing reads only the video's header, so it's cheap even for a huge
+    // file, and lets MediaLimits name the real problem (too long, too big).
     final info = await VideoProbe.probe(file.path);
-    return PickedMedia(
-      bytes: await file.readAsBytes(),
+    // The browser can't compress, so it loads now — unless it's too big to
+    // upload at all, which is then recorded by size only.
+    if (kIsWeb && sizeBytes <= MediaLimits.maxVideoBytes) {
+      return PickedMedia(
+        bytes: await file.readAsBytes(),
+        contentType: contentType,
+        width: info?.width,
+        height: info?.height,
+        durationMs: info?.durationMs,
+        thumbnail: info?.thumbnail,
+      );
+    }
+    return PickedMedia.notLoaded(
+      sourcePath: kIsWeb ? null : file.path,
       contentType: contentType,
+      sizeBytes: sizeBytes,
       width: info?.width,
       height: info?.height,
       durationMs: info?.durationMs,

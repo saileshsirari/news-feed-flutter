@@ -90,15 +90,23 @@ class _AttachmentTile extends StatelessWidget {
           fit: StackFit.expand,
           children: [
             _Preview(item),
-            if (item.status == DraftItemStatus.uploading)
+            if (item.status == DraftItemStatus.preparing || item.status == DraftItemStatus.uploading)
               ColoredBox(
                 color: Colors.black38,
-                child: Center(
-                  child: CircularProgressIndicator(
-                    // Indeterminate until the first bytes go out.
-                    value: item.progress > 0 ? item.progress : null,
-                    color: Colors.white,
-                  ),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    CircularProgressIndicator(
+                      // Indeterminate until the first progress comes in.
+                      value: item.progress > 0 ? item.progress : null,
+                      color: Colors.white,
+                    ),
+                    if (item.status == DraftItemStatus.preparing)
+                      const Padding(
+                        padding: EdgeInsets.only(top: 4),
+                        child: Text('Compressing', style: TextStyle(color: Colors.white, fontSize: 11)),
+                      ),
+                  ],
                 ),
               ),
             if (item.status == DraftItemStatus.failed)

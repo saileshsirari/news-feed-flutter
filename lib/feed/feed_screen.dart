@@ -194,9 +194,11 @@ class _ComposePostDialogState extends ConsumerState<_ComposePostDialog> {
               : () => widget.onPost(widget.controller.text, mediaIds),
           child: Text(widget.isPosting
               ? 'Posting…'
-              : draft.isUploading
-                  ? 'Uploading…'
-                  : 'Post'),
+              : draft.isPreparing
+                  ? 'Compressing…'
+                  : draft.isUploading
+                      ? 'Uploading…'
+                      : 'Post'),
         ),
       ],
     );

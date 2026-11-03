@@ -1,13 +1,8 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
+import '../formatting.dart';
 import '../models/media_attachment.dart';
-
-/// "0:07", "1:30" — how long a video is, for its badge.
-String formatVideoDuration(int milliseconds) {
-  final seconds = (milliseconds / 1000).round();
-  return '${seconds ~/ 60}:${(seconds % 60).toString().padLeft(2, '0')}';
-}
 
 /// A video in a grid: its poster (or plain dark if it has none), a play
 /// button, and its length. Doesn't play; tapping it is the grid's job.

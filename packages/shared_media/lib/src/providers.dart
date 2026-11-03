@@ -4,6 +4,7 @@ import 'data/media_api.dart';
 import 'data/media_upload_service.dart';
 import 'data/media_uploader.dart';
 import 'picking/media_picker.dart';
+import 'processing/video_preparer.dart';
 
 /// The one thing an app must supply: which server, as which user. E.g.
 ///
@@ -23,3 +24,6 @@ final mediaUploadServiceProvider = Provider<MediaUploadService>(
 
 /// Overridable so widget tests can "pick" without the platform plugin.
 final mediaPickerProvider = Provider<MediaPicker>((ref) => MediaPicker());
+
+/// Compresses phone videos before upload; overridable for tests.
+final videoPreparerProvider = Provider<VideoPreparer>((ref) => VideoPreparer());

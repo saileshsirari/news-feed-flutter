@@ -5,9 +5,10 @@ import '../models/picked_media.dart';
 import '../providers.dart';
 import 'media_draft.dart';
 
-/// The files attached in one composer: uploads each as soon as it's
-/// picked, so it's usually ready by the time the user taps send. Used the
-/// same way by the feed and chat composers; they only differ in their key.
+/// The files attached in one composer: prepares (compresses) and uploads
+/// each as soon as it's picked, so it's usually ready by the time the user
+/// taps send. Used the same way by the feed and chat composers; they only
+/// differ in their key.
 class MediaDraftNotifier extends Notifier<MediaDraftState> {
   MediaDraftNotifier(this.draftKey);
 
@@ -18,20 +19,25 @@ class MediaDraftNotifier extends Notifier<MediaDraftState> {
   @override
   MediaDraftState build() => MediaDraftState(items: const [], maxItems: draftKey.maxItems);
 
-  /// Adds [media] at the end and starts uploading it. Returns false (and
-  /// adds nothing) if the draft is already full. A file the rules reject is
-  /// added as failed, with the reason, so the user sees why.
+  /// Adds [media] at the end and starts preparing and uploading it. Returns
+  /// false (and adds nothing) if the draft is already full. A file the
+  /// rules reject is added as failed, with the reason, so the user sees why
+  /// before any time is spent compressing or uploading it.
   bool add(PickedMedia media) {
     if (state.isFull) return false;
     final problem = MediaLimits.problemWith(media);
     final item = DraftItem(
       localId: _nextLocalId++,
       source: media,
-      status: problem == null ? DraftItemStatus.uploading : DraftItemStatus.failed,
+      status: problem != null
+          ? DraftItemStatus.failed
+          : media.needsPreparing
+              ? DraftItemStatus.preparing
+              : DraftItemStatus.uploading,
       error: problem,
     );
     state = state.copyWith(items: [...state.items, item]);
-    if (problem == null) _upload(item.localId);
+    if (problem == null) _process(item.localId);
     return true;
   }
 
@@ -53,15 +59,41 @@ class MediaDraftNotifier extends Notifier<MediaDraftState> {
     final item = _find(localId);
     if (item == null || item.status != DraftItemStatus.failed) return;
     if (MediaLimits.problemWith(item.source) != null) return; // retrying can't fix a rule violation
-    _replace(item.copyWith(status: DraftItemStatus.uploading, progress: 0));
-    _upload(localId);
+    final status = item.source.needsPreparing ? DraftItemStatus.preparing : DraftItemStatus.uploading;
+    _replace(item.copyWith(status: status, progress: 0));
+    _process(localId);
   }
 
   /// After the post or message was sent with [MediaDraftState.mediaIds].
   void clear() => state = state.copyWith(items: const []);
 
-  Future<void> _upload(int localId) async {
-    final source = _find(localId)!.source;
+  Future<void> _process(int localId) async {
+    var source = _find(localId)!.source;
+    if (source.needsPreparing) {
+      try {
+        source = await ref.read(videoPreparerProvider).prepare(
+              source,
+              onProgress: (p) => _update(localId, (i) => i.copyWith(progress: p)),
+            );
+      } catch (_) {
+        _update(localId, (i) => i.copyWith(status: DraftItemStatus.failed, error: 'Couldn\'t read this video. Tap to retry.'));
+        return;
+      }
+      // Keep the prepared file, so a failed upload's retry doesn't compress again.
+      final prepared = source;
+      final problem = MediaLimits.problemWith(prepared);
+      _update(
+        localId,
+        (i) => problem == null
+            ? i.copyWith(source: prepared, status: DraftItemStatus.uploading, progress: 0)
+            : i.copyWith(source: prepared, status: DraftItemStatus.failed, error: problem),
+      );
+      if (problem != null || _find(localId) == null) return;
+    }
+    await _upload(localId, source);
+  }
+
+  Future<void> _upload(int localId, PickedMedia source) async {
     try {
       final uploaded = await ref.read(mediaUploadServiceProvider).upload(
             source,
