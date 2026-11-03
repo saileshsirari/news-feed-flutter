@@ -43,5 +43,10 @@ abstract final class MediaLimits {
     };
   }
 
+  /// For a phone set to upload originals, which skip compressing.
+  static String originalTooLarge(int sizeBytes) =>
+      'This video is ${_mb(sizeBytes)}; originals can be at most ${_mb(maxVideoBytes)}. '
+      'Choose a compressed quality in Settings';
+
   static String _mb(int bytes) => '${(bytes / (1024 * 1024)).round()} MB';
 }

@@ -5,6 +5,8 @@ import '../draft/media_draft.dart';
 import '../draft/media_draft_notifier.dart';
 import '../models/media_attachment.dart';
 import '../providers.dart';
+import '../settings/media_settings.dart';
+import 'video_quality_sheet.dart';
 import 'video_tile.dart';
 
 /// The row of attached files in a composer: drag to reorder, × to remove,
@@ -189,7 +191,9 @@ class _Preview extends StatelessWidget {
 }
 
 /// Opens the gallery for photos and videos and adds what's picked to the
-/// draft, up to the draft's limit. Disabled once the draft is full.
+/// draft, up to the draft's limit. Disabled once the draft is full. The
+/// first time someone picks a video on a phone, it asks how videos should
+/// be compressed (once; it's in Settings after that).
 class AddMediaButton extends ConsumerWidget {
   const AddMediaButton({super.key, required this.draftKey});
 
@@ -206,6 +210,13 @@ class AddMediaButton extends ConsumerWidget {
           : () async {
               final notifier = ref.read(mediaDraftProvider(draftKey).notifier);
               final picked = await ref.read(mediaPickerProvider).pickMedia(limit: draft.maxItems - draft.items.length);
+              if (picked.any((m) => m.needsPreparing) && context.mounted) {
+                final settings = await ref.read(mediaSettingsProvider.future);
+                // Dismissing it just keeps the default; it asks again next time.
+                if (!settings.hasChosenVideoQuality && context.mounted) {
+                  await showVideoQualitySheet(context, firstTime: true);
+                }
+              }
               picked.forEach(notifier.add);
             },
     );

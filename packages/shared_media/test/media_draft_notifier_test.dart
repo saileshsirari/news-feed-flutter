@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_media/shared_media.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 /// Each upload waits until the test completes it, so in-between states can be checked.
 class FakeUploadService implements MediaUploadService {
@@ -36,11 +37,17 @@ class FakePreparer implements VideoPreparer {
 
   final int resultBytes;
   final pending = <(void Function(double)?, Completer<void>)>[];
+  final qualities = <VideoUploadQuality>[];
   int calls = 0;
 
   @override
-  Future<PickedMedia> prepare(PickedMedia media, {void Function(double progress)? onProgress}) async {
+  Future<PickedMedia> prepare(
+    PickedMedia media, {
+    required VideoUploadQuality quality,
+    void Function(double progress)? onProgress,
+  }) async {
     calls++;
+    qualities.add(quality);
     final done = Completer<void>();
     pending.add((onProgress, done));
     await done.future;
@@ -66,7 +73,10 @@ void main() {
     ]);
   }
 
-  setUp(makeContainer);
+  setUp(() {
+    SharedPreferences.setMockInitialValues({});
+    makeContainer();
+  });
 
   (MediaDraftNotifier, ProviderSubscription<MediaDraftState>) open(MediaDraftKey key) {
     final sub = container.listen(mediaDraftProvider(key), (_, _) {});
@@ -176,6 +186,7 @@ void main() {
   test('a phone video is compressed first, then the compressed file is uploaded', () async {
     final (draft, sub) = open(feed);
     draft.add(phoneVideo());
+    await pumpEventQueue(); // the saved quality loads first
 
     expect(sub.read().items.single.status, DraftItemStatus.preparing);
     expect(sub.read().isPreparing, isTrue);
@@ -198,6 +209,7 @@ void main() {
     makeContainer(compressedBytes: 60 * 1024 * 1024);
     final (draft, sub) = open(feed);
     draft.add(phoneVideo());
+    await pumpEventQueue(); // the saved quality loads first
     preparer.pending.single.$2.complete();
     await pumpEventQueue();
 
@@ -209,6 +221,7 @@ void main() {
   test('retrying a failed upload doesn\'t compress again', () async {
     final (draft, sub) = open(feed);
     draft.add(phoneVideo());
+    await pumpEventQueue(); // the saved quality loads first
     preparer.pending.single.$2.complete();
     await pumpEventQueue();
     uploads.fail(0);
@@ -224,5 +237,35 @@ void main() {
     draft.add(PickedMedia.notLoaded(sourcePath: '/v.mp4', contentType: 'video/mp4', sizeBytes: 1024, durationMs: 31000));
     expect(sub.read().items.single.status, DraftItemStatus.failed);
     expect(preparer.calls, 0);
+  });
+
+  test('compresses to the quality chosen in settings', () async {
+    final (draft, _) = open(feed);
+    await container.read(mediaSettingsProvider.notifier).setVideoQuality(VideoUploadQuality.p720);
+    draft.add(phoneVideo());
+    await pumpEventQueue(); // the saved quality loads first
+    await pumpEventQueue();
+    expect(preparer.qualities, [VideoUploadQuality.p720]);
+  });
+
+  test('uses 540p for someone who hasn\'t chosen', () async {
+    final (draft, _) = open(feed);
+    draft.add(phoneVideo());
+    await pumpEventQueue(); // the saved quality loads first
+    await pumpEventQueue();
+    expect(preparer.qualities, [VideoUploadQuality.p540]);
+  });
+
+  test('set to Original, a video over 50 MB fails at once and says how to fix it', () async {
+    final (draft, sub) = open(feed);
+    await container.read(mediaSettingsProvider.notifier).setVideoQuality(VideoUploadQuality.original);
+    // 70 MB: fine to compress, too big to send as is.
+    draft.add(PickedMedia.notLoaded(sourcePath: '/v.mp4', contentType: 'video/mp4', sizeBytes: 70 * 1024 * 1024, durationMs: 20000));
+    await pumpEventQueue();
+    await pumpEventQueue();
+
+    expect(preparer.calls, 0);
+    expect(sub.read().items.single.status, DraftItemStatus.failed);
+    expect(sub.read().items.single.error, contains('Choose a compressed quality in Settings'));
   });
 }

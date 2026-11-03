@@ -3,7 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_media/shared_media.dart';
 import '../models/models.dart';
 import '../session/current_user_provider.dart';
+import '../settings/settings_screen.dart';
 import 'feed_notifier.dart';
+
+enum _MenuAction { settings, logout }
 
 /// The feed's own rule for how many files a post may carry (the server's
 /// MAX_MEDIA_PER_POST); one draft for the compose dialog.
@@ -46,7 +49,22 @@ class FeedScreen extends ConsumerWidget {
         ),
         actions: [
           IconButton(icon: const Icon(Icons.refresh), onPressed: notifier.refresh),
-          IconButton(icon: const Icon(Icons.logout), onPressed: ref.read(currentUserProvider.notifier).logout),
+          PopupMenuButton<_MenuAction>(
+            onSelected: (action) => switch (action) {
+              _MenuAction.settings => SettingsScreen.open(context),
+              _MenuAction.logout => ref.read(currentUserProvider.notifier).logout(),
+            },
+            itemBuilder: (_) => const [
+              PopupMenuItem(
+                value: _MenuAction.settings,
+                child: ListTile(leading: Icon(Icons.settings_outlined), title: Text('Settings')),
+              ),
+              PopupMenuItem(
+                value: _MenuAction.logout,
+                child: ListTile(leading: Icon(Icons.logout), title: Text('Log out')),
+              ),
+            ],
+          ),
         ],
       ),
       floatingActionButton: FloatingActionButton(

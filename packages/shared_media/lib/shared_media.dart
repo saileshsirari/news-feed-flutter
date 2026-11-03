@@ -13,11 +13,14 @@ export 'src/models/media_limits.dart' show MediaLimits;
 export 'src/models/picked_media.dart' show PickedMedia;
 export 'src/picking/media_picker.dart' show MediaPicker;
 export 'src/processing/video_preparer.dart' show VideoPreparer;
+export 'src/settings/media_settings.dart' show MediaSettings, MediaSettingsNotifier, mediaSettingsProvider;
+export 'src/settings/video_upload_quality.dart' show VideoUploadQuality;
 export 'src/providers.dart'
     show mediaApiProvider, mediaPickerProvider, mediaUploadServiceProvider, mediaUploaderProvider, videoPreparerProvider;
 export 'src/widgets/composer_attachments.dart' show AddMediaButton, ComposerAttachments;
 export 'src/widgets/media_grid.dart' show MediaGrid;
 export 'src/widgets/media_image.dart' show MediaImage;
 export 'src/widgets/video_player_screen.dart' show VideoPlayerScreen;
+export 'src/widgets/video_quality_sheet.dart' show VideoQualitySettingTile, showVideoQualitySheet;
 export 'src/formatting.dart' show formatVideoDuration;
 export 'src/widgets/video_tile.dart' show VideoTile;

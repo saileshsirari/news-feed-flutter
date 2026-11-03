@@ -3,12 +3,13 @@ import 'dart:io';
 import 'package:video_compress/video_compress.dart';
 
 import '../models/picked_media.dart';
+import '../settings/video_upload_quality.dart';
 import 'video_preparer.dart';
 
-/// Phones: compress to 720p with the platform's hardware encoder (via
-/// video_compress), then read the result. If compressing fails or doesn't
-/// help, the original is used instead, so a video never fails to post just
-/// because it couldn't be shrunk.
+/// Phones: compress to the chosen quality with the platform's hardware
+/// encoder (via video_compress), then read the result. If compressing fails
+/// or doesn't help, the original is used instead, so a video never fails to
+/// post just because it couldn't be shrunk.
 class PlatformVideoPreparer implements VideoPreparer {
   /// Smaller clips are already quick to upload; not worth the wait.
   static const compressAboveBytes = 8 * 1024 * 1024;
@@ -18,21 +19,41 @@ class PlatformVideoPreparer implements VideoPreparer {
   static Future<void> _queue = Future.value();
 
   @override
-  Future<PickedMedia> prepare(PickedMedia media, {void Function(double progress)? onProgress}) {
+  Future<PickedMedia> prepare(
+    PickedMedia media, {
+    required VideoUploadQuality quality,
+    void Function(double progress)? onProgress,
+  }) {
     final path = media.sourcePath;
     if (!media.needsPreparing || path == null) return Future.value(media);
-    if (media.sizeBytes <= compressAboveBytes) return _load(media, path, path, media.contentType);
+    if (!quality.compresses || media.sizeBytes <= compressAboveBytes) {
+      return _load(media, path, path, media.contentType);
+    }
 
-    final result = _queue.then((_) => _compress(media, path, onProgress));
+    final result = _queue.then((_) => _compress(media, path, _pluginQuality(quality), onProgress));
     _queue = result.then((_) {}, onError: (_) {});
     return result;
   }
 
-  Future<PickedMedia> _compress(PickedMedia media, String path, void Function(double progress)? onProgress) async {
+  /// "At most" sizes: a smaller original isn't scaled up.
+  static VideoQuality _pluginQuality(VideoUploadQuality quality) => switch (quality) {
+        VideoUploadQuality.p1080 => VideoQuality.Res1920x1080Quality,
+        VideoUploadQuality.p720 => VideoQuality.Res1280x720Quality,
+        VideoUploadQuality.p540 => VideoQuality.Res960x540Quality,
+        VideoUploadQuality.p480 => VideoQuality.Res640x480Quality,
+        VideoUploadQuality.original => throw ArgumentError('original is never compressed'),
+      };
+
+  Future<PickedMedia> _compress(
+    PickedMedia media,
+    String path,
+    VideoQuality quality,
+    void Function(double progress)? onProgress,
+  ) async {
     final progress = VideoCompress.compressProgress$.subscribe((percent) => onProgress?.call(percent / 100));
     MediaInfo? compressed;
     try {
-      compressed = await VideoCompress.compressVideo(path, quality: VideoQuality.Res1280x720Quality, includeAudio: true);
+      compressed = await VideoCompress.compressVideo(path, quality: quality, includeAudio: true);
     } catch (_) {
       compressed = null;
     } finally {

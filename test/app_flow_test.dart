@@ -89,7 +89,9 @@ void main() {
     // Back to the feed and log out: login screen again, socket released.
     await tester.tap(find.text('Feed'));
     await tester.pumpAndSettle();
-    await tester.tap(find.byIcon(Icons.logout));
+    await tester.tap(find.byIcon(Icons.more_vert));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Log out'));
     await tester.pumpAndSettle();
     expect(find.text('Log in'), findsOneWidget);
     expect(socket.controller.hasListener, isFalse);

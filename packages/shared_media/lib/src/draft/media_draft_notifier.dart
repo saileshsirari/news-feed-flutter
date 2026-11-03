@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/media_limits.dart';
 import '../models/picked_media.dart';
 import '../providers.dart';
+import '../settings/media_settings.dart';
 import 'media_draft.dart';
 
 /// The files attached in one composer: prepares (compresses) and uploads
@@ -70,9 +71,19 @@ class MediaDraftNotifier extends Notifier<MediaDraftState> {
   Future<void> _process(int localId) async {
     var source = _find(localId)!.source;
     if (source.needsPreparing) {
+      final settings = await ref.read(mediaSettingsProvider.future);
+      final quality = settings.videoQuality;
+      // Uncompressed, the original itself has to fit the server's limit:
+      // say so now, before reading the whole file.
+      if (!quality.compresses && source.sizeBytes > MediaLimits.maxVideoBytes) {
+        final problem = MediaLimits.originalTooLarge(source.sizeBytes);
+        _update(localId, (i) => i.copyWith(status: DraftItemStatus.failed, error: problem));
+        return;
+      }
       try {
         source = await ref.read(videoPreparerProvider).prepare(
               source,
+              quality: quality,
               onProgress: (p) => _update(localId, (i) => i.copyWith(progress: p)),
             );
       } catch (_) {
