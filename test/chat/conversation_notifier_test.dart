@@ -31,8 +31,12 @@ void main() {
   // What the fake server currently has, newest first (like the real API).
   late List<Map<String, dynamic>> serverMessages;
   late List<http.Request> requests;
+  // How many POSTs fail with a dropped connection before one gets through.
+  late int failingPosts;
 
   setUp(() {
+    failingPosts = 0;
+    retryDelay = Duration.zero;
     // Logged in as user 1 (UserSession reads these keys).
     SharedPreferences.setMockInitialValues({'id': 1, 'username': 'user_0', 'followerCount': 0});
     socket = FakeSocket();
@@ -60,6 +64,10 @@ void main() {
           );
         }
         if (request.method == 'POST' && path == '/conversations/5/messages') {
+          if (failingPosts > 0) {
+            failingPosts--;
+            throw http.ClientException('Connection reset by peer');
+          }
           final body = jsonDecode(request.body) as Map<String, dynamic>;
           return http.Response(jsonEncode(message(12, senderId: 1, body: body['body'] as String)), 200);
         }
@@ -156,5 +164,48 @@ void main() {
     await container.pump(); // let autoDispose run
 
     expect(socket.controller.hasListener, isFalse);
+  });
+
+  List<Map<String, dynamic>> posts() => [
+        for (final r in requests)
+          if (r.method == 'POST') jsonDecode(r.body) as Map<String, dynamic>,
+      ];
+
+  test('each send carries a client id, different for every message', () async {
+    final container = await openContainer();
+    await open(container);
+    final notifier = container.read(conversationProvider(5).notifier);
+    await notifier.send('one');
+    await notifier.send('two');
+
+    final ids = posts().map((p) => p['clientMessageId'] as String).toList();
+    expect(ids, hasLength(2));
+    expect(ids[0], isNot(ids[1]));
+    expect(ids, everyElement(matches(RegExp(r'^[\w-]{1,64}$'))));
+  });
+
+  test('a dropped connection is retried once with the same client id', () async {
+    final container = await openContainer();
+    final sub = await open(container);
+    failingPosts = 1;
+
+    await container.read(conversationProvider(5).notifier).send('hello');
+
+    expect(posts(), hasLength(2));
+    expect(posts()[1]['clientMessageId'], posts()[0]['clientMessageId']);
+    expect(sub.read().messages.last.body, 'hello');
+    expect(sub.read().error, isNull);
+  });
+
+  test('gives up after the retry fails too, and says so', () async {
+    final container = await openContainer();
+    final sub = await open(container);
+    failingPosts = 2;
+
+    await container.read(conversationProvider(5).notifier).send('hello');
+
+    expect(posts(), hasLength(2));
+    expect(sub.read().error, startsWith('Couldn\'t send'));
+    expect(sub.read().isSending, isFalse);
   });
 }

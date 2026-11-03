@@ -122,11 +122,22 @@ class ApiService {
     return MessagePage.fromJson(_decodeObject(res));
   }
 
-  Future<ChatMessage> sendMessage(int conversationId, {required int senderId, required String body}) async {
+  /// [clientMessageId] identifies this send: sending again with the same
+  /// one returns the first message instead of posting it twice.
+  Future<ChatMessage> sendMessage(
+    int conversationId, {
+    required int senderId,
+    required String body,
+    String? clientMessageId,
+  }) async {
     final res = await _http.post(
       _uri('/conversations/$conversationId/messages'),
       headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({'senderId': senderId, 'body': body}),
+      body: jsonEncode({
+        'senderId': senderId,
+        'body': body,
+        'clientMessageId': ?clientMessageId,
+      }),
     );
     return ChatMessage.fromJson(_decodeObject(res));
   }
