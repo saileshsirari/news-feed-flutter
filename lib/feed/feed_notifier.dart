@@ -87,7 +87,7 @@ class FeedNotifier extends Notifier<FeedState> {
     final user = ref.read(currentUserProvider).requireValue!;
     _userId = user.id;
     final sub = ref.watch(socketProvider(user.id)).events.listen((event) {
-      if (event['type'] == 'feed_updated') _checkForNewPostsWithRetry();
+      if (event['type'] == 'feed_updated') _checkForNewPosts();
       // Missed any feed_updated while disconnected? Ask once.
       if (event['type'] == 'reconnected') _checkForNewPosts();
     });
@@ -99,34 +99,21 @@ class FeedNotifier extends Notifier<FeedState> {
     return FeedState(user: user);
   }
 
-  /// The server sends feed_updated when a post is *created*, before its
-  /// background fanout has put it in anyone's feed (fanoutService.ts), so
-  /// asking right away usually finds nothing. Ask again a little later
-  /// instead of missing the post until the next manual refresh.
-  Future<void> _checkForNewPostsWithRetry() async {
-    for (final delay in const [Duration.zero, Duration(seconds: 2), Duration(seconds: 5)]) {
-      if (delay > Duration.zero) await Future<void>.delayed(delay);
-      if (!ref.mounted || state.hasNewPosts) return;
-      if (await _checkForNewPosts()) return;
-    }
-  }
-
   /// The socket only ever says "something changed" — it never carries the
   /// post itself. This turns that bare signal into an actual answer via the
   /// same GET /feed/{userId}/new endpoint a manual poll would use; the
-  /// socket just decides *when* to ask. Returns whether anything was new.
-  Future<bool> _checkForNewPosts() async {
-    if (state.posts.isEmpty) return false;
+  /// socket just decides *when* to ask. The server only sends it once the
+  /// fanout has landed, so one check is enough.
+  Future<void> _checkForNewPosts() async {
+    if (state.posts.isEmpty) return;
     final top = state.posts.first;
     final since = CursorCodec.encode(top.createdAt, top.id);
     try {
       final page = await ref.read(apiServiceProvider).getNewerFeed(_userId, since: since, limit: 1);
-      if (!ref.mounted || page.posts.isEmpty) return false;
+      if (!ref.mounted || page.posts.isEmpty) return;
       state = state.copyWith(hasNewPosts: true);
-      return true;
     } catch (_) {
       // Best-effort — a failed "anything new?" check just means no banner.
-      return false;
     }
   }
 
