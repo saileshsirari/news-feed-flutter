@@ -75,17 +75,25 @@ class ComposerAttachments extends ConsumerWidget {
 }
 
 class _AttachmentTile extends StatelessWidget {
-  const _AttachmentTile({required this.item, required this.onRemove, required this.onRetry});
+  const _AttachmentTile({
+    required this.item,
+    required this.onRetry,
+    this.onRemove,
+    this.size = ComposerAttachments.tileSize,
+  });
 
   final DraftItem item;
-  final VoidCallback onRemove;
   final VoidCallback onRetry;
+
+  /// Null hides the × (a message already sent can't drop a file).
+  final VoidCallback? onRemove;
+  final double size;
 
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
     return SizedBox.square(
-      dimension: ComposerAttachments.tileSize,
+      dimension: size,
       child: ClipRRect(
         borderRadius: BorderRadius.circular(8),
         child: Stack(
@@ -105,25 +113,50 @@ class _AttachmentTile extends StatelessWidget {
                   ),
                 ),
               ),
-            Positioned(
-              top: 2,
-              right: 2,
-              child: Material(
-                color: Colors.black54,
-                shape: const CircleBorder(),
-                child: InkWell(
-                  customBorder: const CircleBorder(),
-                  onTap: onRemove,
-                  child: const Padding(
-                    padding: EdgeInsets.all(2),
-                    child: Icon(Icons.close, size: 16, color: Colors.white, semanticLabel: 'Remove'),
+            if (onRemove != null)
+              Positioned(
+                top: 2,
+                right: 2,
+                child: Material(
+                  color: Colors.black54,
+                  shape: const CircleBorder(),
+                  child: InkWell(
+                    customBorder: const CircleBorder(),
+                    onTap: onRemove,
+                    child: const Padding(
+                      padding: EdgeInsets.all(2),
+                      child: Icon(Icons.close, size: 16, color: Colors.white, semanticLabel: 'Remove'),
+                    ),
                   ),
                 ),
               ),
-            ),
           ],
         ),
       ),
+    );
+  }
+}
+
+/// The files of a message that's been sent but is still uploading: the
+/// same previews, progress and tap-to-retry as in the composer, but no
+/// removing or reordering. For a chat's "pending" bubble.
+class PendingMediaGrid extends ConsumerWidget {
+  const PendingMediaGrid({super.key, required this.draftKey, this.tileSize = 96});
+
+  final MediaDraftKey draftKey;
+  final double tileSize;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final draft = ref.watch(mediaDraftProvider(draftKey));
+    final notifier = ref.read(mediaDraftProvider(draftKey).notifier);
+    return Wrap(
+      spacing: 4,
+      runSpacing: 4,
+      children: [
+        for (final item in draft.items)
+          _AttachmentTile(item: item, size: tileSize, onRetry: () => notifier.retry(item.localId)),
+      ],
     );
   }
 }
@@ -182,7 +215,10 @@ class _Preview extends StatelessWidget {
       children: [
         poster != null
             ? Image.memory(poster, fit: BoxFit.cover, gaplessPlayback: true)
-            : const ColoredBox(color: Colors.black87, child: Icon(Icons.videocam, color: Colors.white)),
+            : const ColoredBox(
+                color: Colors.black87,
+                child: Icon(Icons.videocam, color: Colors.white),
+              ),
         if (source.durationMs != null)
           Positioned(left: 4, bottom: 4, child: DurationBadge(milliseconds: source.durationMs!)),
       ],

@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:news_feed_flutter/chat/conversation_notifier.dart';
+import 'package:news_feed_flutter/chat/message_sender.dart';
 import 'package:news_feed_flutter/config/app_config.dart';
 import 'package:news_feed_flutter/data/services/api_service.dart';
 import 'package:news_feed_flutter/data/services/service_providers.dart';
@@ -211,21 +212,6 @@ void main() {
     expect(posts(), hasLength(2));
     expect(sub.read().error, startsWith('Couldn\'t send'));
     expect(sub.read().isSending, isFalse);
-  });
-
-  test('sends photos and videos, with or without text', () async {
-    final container = await openContainer();
-    await open(container);
-    final notifier = container.read(conversationProvider(5).notifier);
-
-    await notifier.send('', mediaIds: [7, 3]);
-    await notifier.send('  look  ', mediaIds: [9]);
-    await notifier.send('   '); // neither text nor media: nothing sent
-
-    expect(posts().map((p) => [p['body'], p['mediaIds']]).toList(), [
-      ['', [7, 3]],
-      ['look', [9]],
-    ]);
   });
 
   test('reads a message\'s photos and videos from the server', () {

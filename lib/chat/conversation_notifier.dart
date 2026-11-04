@@ -1,13 +1,12 @@
 import 'dart:async';
-import 'dart:math';
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../data/services/api_service.dart';
 import '../data/services/service_providers.dart';
 import '../data/services/socket_provider.dart';
 import '../models/models.dart';
 import '../session/current_user_provider.dart';
+import 'chat_outbox.dart';
+import 'message_sender.dart';
 
 /// Everything ConversationScreen draws, as one immutable value.
 ///
@@ -100,6 +99,13 @@ class ConversationNotifier extends Notifier<ConversationState> {
     final socket = ref.watch(socketProvider(_currentUserId));
     final sub = socket.events.listen(_onEvent);
     ref.onDispose(sub.cancel);
+    // Messages with photos/videos finish sending in the outbox, possibly
+    // well after you tapped send; show each as it lands.
+    ref.listen(chatOutboxProvider(conversationId), (previous, next) {
+      for (final message in next.sent.skip(previous?.sent.length ?? 0)) {
+        _addSent(message);
+      }
+    });
 
     // Both are async: they only touch `state` after their first await, by
     // which time build() has returned this starting value.
@@ -173,55 +179,39 @@ class ConversationNotifier extends Notifier<ConversationState> {
     }
   }
 
-  /// Sends [body], retrying once if the connection fails. The retry reuses
-  /// the same client id, so if the first attempt did reach the server (and
-  /// only its reply was lost), the server returns that message rather than
-  /// posting it twice.
-  /// [mediaIds] are already uploaded (see shared_media's MediaDraftNotifier).
-  /// A message needs text, media, or both.
-  Future<void> send(String body, {List<int> mediaIds = const []}) async {
+  /// Sends text right away (retrying once on a dropped connection, see
+  /// sendWithOneRetry). Messages with photos or videos go through
+  /// ChatOutboxNotifier instead, which waits for their uploads.
+  Future<void> send(String body) async {
     final trimmed = body.trim();
-    if (trimmed.isEmpty && mediaIds.isEmpty) return;
+    if (trimmed.isEmpty) return;
     state = state.copyWith(isSending: true);
-    final clientMessageId = newClientMessageId(_currentUserId);
-    Future<ChatMessage> attempt() => ref
-        .read(apiServiceProvider)
-        .sendMessage(
-          conversationId,
-          senderId: _currentUserId,
-          body: trimmed,
-          clientMessageId: clientMessageId,
-          mediaIds: mediaIds,
-        );
     try {
-      ChatMessage message;
-      try {
-        message = await attempt();
-      } on ApiException {
-        rethrow; // the server answered and refused: retrying won't change that
-      } catch (_) {
-        await Future<void>.delayed(retryDelay);
-        if (!ref.mounted) return;
-        message = await attempt();
-      }
+      final message = await sendWithOneRetry(
+        ref.read(apiServiceProvider),
+        conversationId,
+        senderId: _currentUserId,
+        body: trimmed,
+        clientMessageId: newClientMessageId(_currentUserId),
+      );
       if (!ref.mounted) return;
-      state = state.copyWith(messages: [...state.messages, message], isSending: false);
-      _markRead();
+      state = state.copyWith(isSending: false);
+      _addSent(message);
     } catch (e) {
       if (!ref.mounted) return;
       state = state.copyWith(isSending: false, error: 'Couldn\'t send: $e');
     }
   }
+
+  /// Your own sent message, from here or the outbox: added at once (the
+  /// socket only announces other people's messages), unless a reload got
+  /// there first.
+  void _addSent(ChatMessage message) {
+    if (state.messages.any((m) => m.id == message.id)) return;
+    state = state.copyWith(messages: [...state.messages, message]);
+    _markRead();
+  }
 }
-
-/// How long send waits before its one retry; tests shorten it.
-@visibleForTesting
-Duration retryDelay = const Duration(seconds: 1);
-
-/// A new id for one send: unique per user without asking the server, and
-/// only letters, digits and dashes, as the server requires.
-String newClientMessageId(int userId) =>
-    '$userId-${DateTime.now().microsecondsSinceEpoch}-${Random.secure().nextInt(1 << 32).toRadixString(36)}';
 
 /// One notifier per open conversation.
 ///   - `.autoDispose`: cleared when ConversationScreen closes

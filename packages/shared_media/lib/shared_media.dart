@@ -17,7 +17,7 @@ export 'src/settings/media_settings.dart' show MediaSettings, MediaSettingsNotif
 export 'src/settings/video_upload_quality.dart' show VideoUploadQuality;
 export 'src/providers.dart'
     show mediaApiProvider, mediaPickerProvider, mediaUploadServiceProvider, mediaUploaderProvider, videoPreparerProvider;
-export 'src/widgets/composer_attachments.dart' show AddMediaButton, ComposerAttachments;
+export 'src/widgets/composer_attachments.dart' show AddMediaButton, ComposerAttachments, PendingMediaGrid;
 export 'src/widgets/media_grid.dart' show MediaGrid;
 export 'src/widgets/media_image.dart' show MediaImage;
 export 'src/widgets/video_player_screen.dart' show VideoPlayerScreen;

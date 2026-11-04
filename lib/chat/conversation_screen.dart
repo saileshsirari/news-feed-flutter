@@ -5,6 +5,7 @@ import '../presence/presence_widgets.dart';
 import '../call/call_screen.dart';
 import '../session/current_user_provider.dart';
 import '../models/models.dart';
+import 'chat_outbox.dart';
 import 'conversation_notifier.dart';
 
 /// Compose/Android: ≈ a screen composable doing
@@ -33,9 +34,11 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
   final _controller = TextEditingController();
   final _scrollController = ScrollController();
 
-  /// This conversation's attachments: its own draft, so photos picked in one
-  /// chat don't show up in another (or in the feed's compose dialog).
-  late final MediaDraftKey _draftKey = (id: 'chat:${widget.conversationId}', maxItems: 10);
+  /// The composer's attachments: a draft of its own, so photos picked in one
+  /// chat don't show up in another. Sending hands the draft (and its
+  /// uploads) to the outbox, and the composer moves on to a new one.
+  int _draftGeneration = 0;
+  MediaDraftKey get _draftKey => (id: 'chat:${widget.conversationId}:$_draftGeneration', maxItems: 10);
 
   @override
   void initState() {
@@ -57,11 +60,13 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
     // Was: context.watch<ConversationViewModel>(). Same idea: read the
     // state and rebuild whenever the notifier assigns a new one.
     final vm = ref.watch(conversationProvider(widget.conversationId));
+    final outbox = ref.watch(chatOutboxProvider(widget.conversationId));
     // Watching also keeps the draft alive while this chat is open.
     final draft = ref.watch(mediaDraftProvider(_draftKey));
-    // Null while anything is still compressing, uploading, or failed.
-    final mediaIds = draft.mediaIds;
-    final canSend = !vm.isSending && mediaIds != null && (_controller.text.trim().isNotEmpty || !draft.isEmpty);
+    // Attachments don't have to be uploaded yet (the outbox waits for them),
+    // but one that failed (too big, too long) has to be fixed or removed.
+    final hasText = _controller.text.trim().isNotEmpty;
+    final canSend = !draft.hasFailures && (draft.isEmpty ? hasText && !vm.isSending : true);
 
     // Keep the newest message in view: jump there when the thread first
     // loads, glide there when a message arrives or you send one. A side
@@ -69,6 +74,9 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
     // listState.animateScrollToItem(last) }` in Compose).
     ref.listen(conversationProvider(widget.conversationId).select((s) => s.messages.length), (previous, next) {
       if (next > (previous ?? 0)) _scrollToBottom(animate: (previous ?? 0) > 0);
+    });
+    ref.listen(chatOutboxProvider(widget.conversationId).select((s) => s.pending.length), (previous, next) {
+      if (next > (previous ?? 0)) _scrollToBottom(animate: true);
     });
 
     return Scaffold(
@@ -106,8 +114,15 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
                 : ListView.builder(
                     controller: _scrollController,
                     padding: const EdgeInsets.all(8),
-                    itemCount: vm.messages.length,
+                    // Sent messages, then yours still uploading at the bottom.
+                    itemCount: vm.messages.length + outbox.pending.length,
                     itemBuilder: (context, index) {
+                      if (index >= vm.messages.length) {
+                        return _PendingBubble(
+                          conversationId: widget.conversationId,
+                          message: outbox.pending[index - vm.messages.length],
+                        );
+                      }
                       final message = vm.messages[index];
                       final isMine = message.senderId == currentUserId;
                       // Only the current user's most recent message can show
@@ -140,17 +155,13 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
                         child: TextField(
                           controller: _controller,
                           decoration: const InputDecoration(hintText: 'Message', border: OutlineInputBorder()),
-                          onSubmitted: (_) => canSend ? _send(mediaIds) : null,
+                          onSubmitted: (_) => canSend ? _send(draft) : null,
                         ),
                       ),
                       IconButton(
                         icon: const Icon(Icons.send),
-                        tooltip: draft.isPreparing
-                            ? 'Compressing…'
-                            : draft.isUploading
-                                ? 'Uploading…'
-                                : 'Send',
-                        onPressed: canSend ? () => _send(mediaIds) : null,
+                        tooltip: 'Send',
+                        onPressed: canSend ? () => _send(draft) : null,
                       ),
                     ],
                   ),
@@ -177,13 +188,19 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
     });
   }
 
-  /// [mediaIds] from a ready draft (see canSend in build).
-  void _send(List<int> mediaIds) {
+  /// Text goes straight out. With attachments, the message goes to the
+  /// outbox, which sends it once its uploads finish (like WhatsApp): the
+  /// composer is free again at once, for more text or more photos.
+  void _send(MediaDraftState draft) {
     // ref.read(...notifier) to call a method (≈ `vm.send(text)` in Compose);
     // ref.watch above is only for reading state.
-    ref.read(conversationProvider(widget.conversationId).notifier).send(_controller.text, mediaIds: mediaIds);
+    if (draft.isEmpty) {
+      ref.read(conversationProvider(widget.conversationId).notifier).send(_controller.text);
+    } else {
+      ref.read(chatOutboxProvider(widget.conversationId).notifier).send(_controller.text, _draftKey);
+      setState(() => _draftGeneration++);
+    }
     _controller.clear();
-    ref.read(mediaDraftProvider(_draftKey).notifier).clear();
   }
 }
 
@@ -233,6 +250,70 @@ class _MessageBubble extends StatelessWidget {
               style: Theme.of(context).textTheme.labelSmall?.copyWith(color: colorScheme.onSurfaceVariant),
             ),
           ),
+      ],
+    );
+  }
+}
+
+/// A message of yours whose photos/videos are still uploading: shown in the
+/// chat at once with their progress, faded until the server has it, with
+/// retry or discard if something failed.
+class _PendingBubble extends ConsumerWidget {
+  const _PendingBubble({required this.conversationId, required this.message});
+
+  final int conversationId;
+  final PendingMessage message;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+    final outbox = ref.read(chatOutboxProvider(conversationId).notifier);
+    final failed = message.status == PendingStatus.failed;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        Opacity(
+          opacity: failed ? 1 : 0.85,
+          child: Container(
+            margin: const EdgeInsets.symmetric(vertical: 4),
+            padding: const EdgeInsets.all(8),
+            constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.75),
+            decoration: BoxDecoration(
+              color: colorScheme.primaryContainer,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                PendingMediaGrid(draftKey: message.draftKey),
+                if (message.body.isNotEmpty)
+                  Padding(padding: const EdgeInsets.only(top: 6), child: Text(message.body)),
+              ],
+            ),
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.only(right: 4, bottom: 4),
+          child: failed
+              ? Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Flexible(
+                      child: Text(
+                        message.error ?? 'Couldn\'t send',
+                        style: textTheme.labelSmall?.copyWith(color: colorScheme.error),
+                      ),
+                    ),
+                    TextButton(onPressed: () => outbox.retry(message.clientMessageId), child: const Text('Retry')),
+                    TextButton(onPressed: () => outbox.discard(message.clientMessageId), child: const Text('Discard')),
+                  ],
+                )
+              : Text(
+                  message.status == PendingStatus.sending ? 'Sending…' : 'Uploading…',
+                  style: textTheme.labelSmall?.copyWith(color: colorScheme.onSurfaceVariant),
+                ),
+        ),
       ],
     );
   }
