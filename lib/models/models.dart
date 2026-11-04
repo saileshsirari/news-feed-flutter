@@ -161,6 +161,9 @@ class ChatMessage {
   final int createdAt;
   final String senderUsername;
 
+  /// Photos and videos, in the order the sender arranged them.
+  final List<MediaAttachment> media;
+
   ChatMessage({
     required this.id,
     required this.conversationId,
@@ -168,6 +171,7 @@ class ChatMessage {
     required this.body,
     required this.createdAt,
     required this.senderUsername,
+    this.media = const [],
   });
 
   factory ChatMessage.fromJson(Map<String, dynamic> json) => ChatMessage(
@@ -177,6 +181,9 @@ class ChatMessage {
         body: json['body'] as String,
         createdAt: json['created_at'] as int,
         senderUsername: json['sender_username'] as String,
+        media: [
+          for (final m in json['media'] as List? ?? const []) MediaAttachment.fromJson(m as Map<String, dynamic>),
+        ],
       );
 }
 

@@ -129,6 +129,7 @@ class ApiService {
     required int senderId,
     required String body,
     String? clientMessageId,
+    List<int> mediaIds = const [],
   }) async {
     final res = await _http.post(
       _uri('/conversations/$conversationId/messages'),
@@ -137,6 +138,7 @@ class ApiService {
         'senderId': senderId,
         'body': body,
         'clientMessageId': ?clientMessageId,
+        if (mediaIds.isNotEmpty) 'mediaIds': mediaIds,
       }),
     );
     return ChatMessage.fromJson(_decodeObject(res));

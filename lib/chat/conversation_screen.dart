@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_media/shared_media.dart';
 import '../presence/presence_widgets.dart';
 import '../call/call_screen.dart';
 import '../session/current_user_provider.dart';
@@ -32,6 +33,17 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
   final _controller = TextEditingController();
   final _scrollController = ScrollController();
 
+  /// This conversation's attachments: its own draft, so photos picked in one
+  /// chat don't show up in another (or in the feed's compose dialog).
+  late final MediaDraftKey _draftKey = (id: 'chat:${widget.conversationId}', maxItems: 10);
+
+  @override
+  void initState() {
+    super.initState();
+    // The send button depends on whether there's text.
+    _controller.addListener(() => setState(() {}));
+  }
+
   @override
   void dispose() {
     _controller.dispose();
@@ -45,6 +57,11 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
     // Was: context.watch<ConversationViewModel>(). Same idea: read the
     // state and rebuild whenever the notifier assigns a new one.
     final vm = ref.watch(conversationProvider(widget.conversationId));
+    // Watching also keeps the draft alive while this chat is open.
+    final draft = ref.watch(mediaDraftProvider(_draftKey));
+    // Null while anything is still compressing, uploading, or failed.
+    final mediaIds = draft.mediaIds;
+    final canSend = !vm.isSending && mediaIds != null && (_controller.text.trim().isNotEmpty || !draft.isEmpty);
 
     // Keep the newest message in view: jump there when the thread first
     // loads, glide there when a message arrives or you send one. A side
@@ -108,18 +125,34 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
           SafeArea(
             child: Padding(
               padding: const EdgeInsets.all(8),
-              child: Row(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  Expanded(
-                    child: TextField(
-                      controller: _controller,
-                      decoration: const InputDecoration(hintText: 'Message', border: OutlineInputBorder()),
-                      onSubmitted: (_) => _send(),
+                  if (!draft.isEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: ComposerAttachments(draftKey: _draftKey),
                     ),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.send),
-                    onPressed: vm.isSending ? null : _send,
+                  Row(
+                    children: [
+                      AddMediaButton(draftKey: _draftKey),
+                      Expanded(
+                        child: TextField(
+                          controller: _controller,
+                          decoration: const InputDecoration(hintText: 'Message', border: OutlineInputBorder()),
+                          onSubmitted: (_) => canSend ? _send(mediaIds) : null,
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.send),
+                        tooltip: draft.isPreparing
+                            ? 'Compressing…'
+                            : draft.isUploading
+                                ? 'Uploading…'
+                                : 'Send',
+                        onPressed: canSend ? () => _send(mediaIds) : null,
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -144,12 +177,13 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
     });
   }
 
-  void _send() {
-    if (_controller.text.trim().isEmpty) return;
+  /// [mediaIds] from a ready draft (see canSend in build).
+  void _send(List<int> mediaIds) {
     // ref.read(...notifier) to call a method (≈ `vm.send(text)` in Compose);
     // ref.watch above is only for reading state.
-    ref.read(conversationProvider(widget.conversationId).notifier).send(_controller.text);
+    ref.read(conversationProvider(widget.conversationId).notifier).send(_controller.text, mediaIds: mediaIds);
     _controller.clear();
+    ref.read(mediaDraftProvider(_draftKey).notifier).clear();
   }
 }
 
@@ -181,7 +215,13 @@ class _MessageBubble extends StatelessWidget {
                   '@${message.senderUsername}',
                   style: Theme.of(context).textTheme.labelSmall,
                 ),
-              Text(message.body),
+              if (message.media.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  // Tapping a video plays it full screen (MediaGrid's default).
+                  child: MediaGrid(media: message.media),
+                ),
+              if (message.body.isNotEmpty) Text(message.body),
             ],
           ),
         ),

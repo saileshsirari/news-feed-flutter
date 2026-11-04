@@ -9,7 +9,9 @@ import 'package:news_feed_flutter/config/app_config.dart';
 import 'package:news_feed_flutter/data/services/api_service.dart';
 import 'package:news_feed_flutter/data/services/service_providers.dart';
 import 'package:news_feed_flutter/data/services/socket_provider.dart';
+import 'package:news_feed_flutter/models/models.dart';
 import 'package:news_feed_flutter/session/current_user_provider.dart';
+import 'package:shared_media/shared_media.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../helpers/fake_socket.dart';
@@ -22,6 +24,8 @@ Map<String, dynamic> message(int id, {int senderId = 2, String body = 'hi'}) => 
       'created_at': id,
       'sender_username': 'user_$senderId',
     };
+
+Map<String, dynamic> message12() => message(12);
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -207,5 +211,33 @@ void main() {
     expect(posts(), hasLength(2));
     expect(sub.read().error, startsWith('Couldn\'t send'));
     expect(sub.read().isSending, isFalse);
+  });
+
+  test('sends photos and videos, with or without text', () async {
+    final container = await openContainer();
+    await open(container);
+    final notifier = container.read(conversationProvider(5).notifier);
+
+    await notifier.send('', mediaIds: [7, 3]);
+    await notifier.send('  look  ', mediaIds: [9]);
+    await notifier.send('   '); // neither text nor media: nothing sent
+
+    expect(posts().map((p) => [p['body'], p['mediaIds']]).toList(), [
+      ['', [7, 3]],
+      ['look', [9]],
+    ]);
+  });
+
+  test('reads a message\'s photos and videos from the server', () {
+    final message = ChatMessage.fromJson({
+      ...message12(),
+      'media': [
+        {'id': 3, 'kind': 'video', 'contentType': 'video/mp4', 'sizeBytes': 9, 'durationMs': 4000, 'url': 'https://b.test/3'},
+        {'id': 1, 'kind': 'image', 'contentType': 'image/jpeg', 'sizeBytes': 5, 'url': 'https://b.test/1'},
+      ],
+    });
+    expect(message.media.map((m) => m.id), [3, 1]);
+    expect(message.media.first.kind, MediaKind.video);
+    expect(ChatMessage.fromJson(message12()).media, isEmpty);
   });
 }

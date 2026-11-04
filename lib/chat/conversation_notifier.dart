@@ -177,14 +177,22 @@ class ConversationNotifier extends Notifier<ConversationState> {
   /// the same client id, so if the first attempt did reach the server (and
   /// only its reply was lost), the server returns that message rather than
   /// posting it twice.
-  Future<void> send(String body) async {
+  /// [mediaIds] are already uploaded (see shared_media's MediaDraftNotifier).
+  /// A message needs text, media, or both.
+  Future<void> send(String body, {List<int> mediaIds = const []}) async {
     final trimmed = body.trim();
-    if (trimmed.isEmpty) return;
+    if (trimmed.isEmpty && mediaIds.isEmpty) return;
     state = state.copyWith(isSending: true);
     final clientMessageId = newClientMessageId(_currentUserId);
     Future<ChatMessage> attempt() => ref
         .read(apiServiceProvider)
-        .sendMessage(conversationId, senderId: _currentUserId, body: trimmed, clientMessageId: clientMessageId);
+        .sendMessage(
+          conversationId,
+          senderId: _currentUserId,
+          body: trimmed,
+          clientMessageId: clientMessageId,
+          mediaIds: mediaIds,
+        );
     try {
       ChatMessage message;
       try {
