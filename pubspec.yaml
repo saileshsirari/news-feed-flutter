@@ -43,6 +43,9 @@ dependencies:
   # Zitadel sign-in (OIDC + PKCE), shared with any future split-out chat app.
   oidc_auth:
     path: packages/oidc_auth
+  # Chat history on the device (SQLite), synced by seq, searchable.
+  chat_store:
+    path: packages/chat_store
   shared_preferences: ^2.3.3
   # A device's name for the device list ("Pixel 8", "Chrome on macOS").
   device_info_plus: ^13.2.0

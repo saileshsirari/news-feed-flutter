@@ -17,6 +17,7 @@ import 'package:news_feed_flutter/session/current_user_provider.dart';
 import 'package:shared_media/shared_media.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../helpers/fake_chat_server.dart';
 import '../helpers/fake_socket.dart';
 
 /// Each upload waits until the test finishes or fails it.
@@ -53,6 +54,7 @@ void main() {
   // How many message POSTs fail with a dropped connection before one gets through.
   late int failingPosts;
   late ProviderContainer container;
+  late List<Map<String, dynamic>> serverMessages;
   var nextMessageId = 100;
 
   setUp(() async {
@@ -60,6 +62,7 @@ void main() {
     retryDelay = Duration.zero;
     uploads = FakeUploads();
     posts = [];
+    serverMessages = [];
     failingPosts = 0;
     final socket = FakeSocket();
     final api = ApiService(
@@ -72,21 +75,19 @@ void main() {
           }
           final body = jsonDecode(request.body) as Map<String, dynamic>;
           posts.add(body);
-          return http.Response(
-            jsonEncode({
-              'id': nextMessageId++,
-              'conversation_id': 5,
-              'sender_id': 1,
-              'body': body['body'],
-              'created_at': nextMessageId,
-              'sender_username': 'user_0',
-            }),
-            201,
-          );
+          final sent = {
+            'id': nextMessageId,
+            'conversation_id': 5,
+            'seq': serverMessages.length + 1,
+            'sender_id': 1,
+            'body': body['body'],
+            'created_at': nextMessageId++,
+            'sender_username': 'user_0',
+          };
+          serverMessages.add(sent);
+          return http.Response(jsonEncode(sent), 201);
         }
-        if (request.url.path == '/conversations/5/messages') {
-          return http.Response(jsonEncode({'messages': [], 'nextCursor': null}), 200);
-        }
+        if (request.url.path == '/conversations/5/messages') return answerMessagesBySeq(request, serverMessages);
         if (request.url.path == '/conversations/5/reads') return http.Response('[]', 200);
         return http.Response('{}', 200);
       }),
@@ -95,6 +96,7 @@ void main() {
       apiServiceProvider.overrideWithValue(api),
       socketProvider.overrideWith((ref, userId) => socket),
       mediaUploadServiceProvider.overrideWithValue(uploads),
+      ...localChatOverrides(),
     ]);
     await container.read(currentUserProvider.future);
   });

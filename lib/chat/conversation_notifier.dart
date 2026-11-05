@@ -1,11 +1,14 @@
 import 'dart:async';
 
+import 'package:chat_store/chat_store.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
 import '../data/services/service_providers.dart';
 import '../data/services/socket_provider.dart';
 import '../models/models.dart';
 import '../session/current_user_provider.dart';
 import 'chat_outbox.dart';
+import 'local/local_chat.dart';
 import 'message_sender.dart';
 
 /// Everything ConversationScreen draws, as one immutable value.
@@ -23,12 +26,22 @@ class ConversationState {
     this.isSending = false,
     this.messages = const [],
     this.readStateByUserId = const {},
+    this.isLoadingOlder = false,
+    this.reachedStart = false,
   });
 
   final bool isLoading;
   final String? error;
   final bool isSending;
+
+  /// Oldest first: the run of the conversation this device has, newest end.
   final List<ChatMessage> messages;
+
+  /// Fetching the page above the top (you scrolled up).
+  final bool isLoadingOlder;
+
+  /// [messages] go back to the conversation's first message.
+  final bool reachedStart;
 
   /// Every participant's read pointer, keyed by userId — the "seen" tick's
   /// data source. Populated once on open (_loadReadStates) and kept current
@@ -54,6 +67,8 @@ class ConversationState {
     bool? isSending,
     List<ChatMessage>? messages,
     Map<int, int>? readStateByUserId,
+    bool? isLoadingOlder,
+    bool? reachedStart,
   }) {
     return ConversationState(
       isLoading: isLoading ?? this.isLoading,
@@ -61,20 +76,25 @@ class ConversationState {
       isSending: isSending ?? this.isSending,
       messages: messages ?? this.messages,
       readStateByUserId: readStateByUserId ?? this.readStateByUserId,
+      isLoadingOlder: isLoadingOlder ?? this.isLoadingOlder,
+      reachedStart: reachedStart ?? this.reachedStart,
     );
   }
 
   static const _keep = Object();
 }
 
-/// A single conversation's message thread — history via GET
-/// /conversations/:id/messages, live delivery via the shared AppSocket's
-/// message_created events (see chatConsumer.ts for the server side of that
-/// push). Marks read whenever the newest message changes, same "opened it,
-/// so mark read" trigger a real app would use.
+/// A single conversation's message thread, local first: what this device
+/// already has (chat_store's SQLite) shows at once, even offline; then
+/// ChatSync brings in what's new from the server, and the list updates by
+/// itself as rows land (it watches the database). Live delivery via the
+/// shared AppSocket's message_created events, which carry the message's seq
+/// so only what's missing is fetched. Marks read whenever the newest message
+/// changes while the chat is open.
 ///
 /// Compose/Android: ≈ `class ConversationViewModel @AssistedInject
-/// constructor(@Assisted conversationId: Int, api: ApiService)`.
+/// constructor(@Assisted conversationId: Int, repo: ChatRepository)` that
+/// collects a Room `Flow<List<Message>>` and calls `repo.refresh()`.
 ///   - `Notifier<ConversationState>` ≈ ViewModel with `StateFlow<UiState>`
 ///   - `build()`                     ≈ `init { }`: first state + start loading
 ///   - `state = state.copyWith(...)` ≈ `_state.update { it.copy(...) }`,
@@ -89,16 +109,24 @@ class ConversationNotifier extends Notifier<ConversationState> {
   /// conversationId 42.
   final int conversationId;
   late int _currentUserId;
+  late MessageStore _store;
+  late ChatSync _sync;
+
+  /// The first seq the list shows: the bottom of the newest run.
+  int? _from;
+  StreamSubscription<List<StoredMessage>>? _messagesSub;
+  int _lastMarkedRead = 0;
 
   @override
   ConversationState build() {
     // ref.read, not watch: the user can't change while a chat is open, and
     // watching would rebuild this dying notifier on logout.
     _currentUserId = ref.read(currentUserProvider).requireValue!.id;
+    _store = ref.read(messageStoreProvider);
+    _sync = ref.read(chatSyncProvider);
     // watch keeps the shared socket alive while this chat is open.
     final socket = ref.watch(socketProvider(_currentUserId));
     final sub = socket.events.listen(_onEvent);
-    ref.onDispose(sub.cancel);
     // Messages with photos/videos finish sending in the outbox, possibly
     // well after you tapped send; show each as it lands.
     ref.listen(chatOutboxProvider(conversationId), (previous, next) {
@@ -107,35 +135,94 @@ class ConversationNotifier extends Notifier<ConversationState> {
       }
     });
 
+    // The list is the newest run, from its first seq up. When scrolling back
+    // extends the run downwards, follow it; when no run exists yet, show
+    // whatever is stored (e.g. a message you just sent).
+    final rangeSub = _store.watchNewestRange(conversationId).listen((range) {
+      if (!ref.mounted) return;
+      _watchFrom(range?.low ?? 0);
+      if (range != null && range.low <= 1 && !state.reachedStart) state = state.copyWith(reachedStart: true);
+    });
+    ref.onDispose(() {
+      sub.cancel();
+      rangeSub.cancel();
+      _messagesSub?.cancel();
+    });
+
     // Both are async: they only touch `state` after their first await, by
     // which time build() has returned this starting value.
-    _fetchMessages();
+    _syncLatest();
     _loadReadStates();
     return const ConversationState();
+  }
+
+  void _watchFrom(int from) {
+    if (from == _from) return;
+    _from = from;
+    _messagesSub?.cancel();
+    _messagesSub = _store.watchFrom(conversationId, from).listen((rows) {
+      if (!ref.mounted) return;
+      final messages = [for (final row in rows) chatMessageFrom(row)];
+      state = state.copyWith(messages: messages, isLoading: state.isLoading && messages.isEmpty);
+      _markReadIfNewer();
+    });
+  }
+
+  Future<void> _syncLatest() async {
+    try {
+      await _sync.syncLatest(conversationId);
+      if (!ref.mounted) return;
+      state = state.copyWith(isLoading: false, error: null);
+      // Photo links in older stored copies may have expired: refresh the
+      // ones near the bottom, which is where you'll look first.
+      final range = await _store.newestRange(conversationId);
+      if (range != null && ref.mounted) {
+        await _sync.refreshStale(conversationId, (range.high - 200).clamp(range.low, range.high), range.high);
+      }
+    } catch (e) {
+      if (!ref.mounted) return;
+      // Offline with history on the device: just show that.
+      state = state.copyWith(isLoading: false, error: state.messages.isEmpty ? 'Couldn\'t load messages: $e' : null);
+    }
+  }
+
+  /// The page above the oldest message shown (you scrolled to the top).
+  Future<void> loadOlder() async {
+    if (state.isLoadingOlder || state.reachedStart || state.isLoading) return;
+    state = state.copyWith(isLoadingOlder: true);
+    try {
+      final more = await _sync.loadOlder(conversationId);
+      if (!ref.mounted) return;
+      state = state.copyWith(isLoadingOlder: false, reachedStart: state.reachedStart || !more);
+    } catch (e) {
+      if (!ref.mounted) return;
+      state = state.copyWith(isLoadingOlder: false, error: 'Couldn\'t load older messages: $e');
+    }
   }
 
   void _onEvent(Map<String, dynamic> event) {
     if (event['type'] == 'reconnected') {
       // Whatever arrived while the socket was down was never delivered:
-      // reload both the messages and everyone's read pointers.
-      _fetchMessages(markReadAfter: true);
+      // sync, and reload everyone's read pointers.
+      _syncLatest();
       _loadReadStates();
       return;
     }
     if (event['conversationId'] != conversationId) return;
     if (event['type'] == 'message_created') {
-      // The push only ever carries an id, same "go fetch the real thing"
-      // pattern as the feed's realtime ping — reload rather than trust
-      // whatever shape happens to be in the event payload.
-      state = state.copyWith(isLoading: state.messages.isEmpty, error: null);
-      _fetchMessages(markReadAfter: true);
+      // The event carries the seq: fetch only what's missing up to it.
+      final seq = event['seq'];
+      if (seq is int) {
+        _sync.onNewMessage(conversationId, seq).catchError((Object _) {});
+      } else {
+        _syncLatest();
+      }
       return;
     }
     if (event['type'] == 'read_receipt_updated') {
-      state = state.copyWith(readStateByUserId: {
-        ...state.readStateByUserId,
-        event['userId'] as int: event['lastReadMessageId'] as int,
-      });
+      state = state.copyWith(
+        readStateByUserId: {...state.readStateByUserId, event['userId'] as int: event['lastReadMessageId'] as int},
+      );
     }
   }
 
@@ -145,38 +232,25 @@ class ConversationNotifier extends Notifier<ConversationState> {
       // The screen may have closed while we waited; a disposed notifier
       // can't take new state. (The old ChangeNotifier had no such guard.)
       if (!ref.mounted) return;
-      state = state.copyWith(readStateByUserId: {
-        ...state.readStateByUserId,
-        for (final s in states) s.userId: s.lastReadMessageId,
-      });
+      state = state.copyWith(
+        readStateByUserId: {...state.readStateByUserId, for (final s in states) s.userId: s.lastReadMessageId},
+      );
     } catch (_) {
       // Best-effort — the conversation still works with no "seen" indicator.
     }
   }
 
-  Future<void> _fetchMessages({bool markReadAfter = false}) async {
-    try {
-      final page = await ref.read(apiServiceProvider).getMessages(conversationId, _currentUserId);
-      if (!ref.mounted) return;
-      // Server returns newest-first; a chat UI wants oldest-first (reading
-      // top to bottom), so reverse once here rather than re-querying.
-      state = state.copyWith(messages: page.messages.reversed.toList(), isLoading: false);
-      if (markReadAfter && state.messages.isNotEmpty) _markRead();
-    } catch (e) {
-      if (!ref.mounted) return;
-      state = state.copyWith(isLoading: false, error: 'Couldn\'t load messages: $e');
-    }
-  }
-
-  Future<void> _markRead() async {
+  /// Opening a chat, or a new message arriving while it's open, is reading.
+  void _markReadIfNewer() {
     if (state.messages.isEmpty) return;
-    try {
-      await ref
-          .read(apiServiceProvider)
-          .markRead(conversationId, userId: _currentUserId, lastReadMessageId: state.messages.last.id);
-    } catch (_) {
-      // Best-effort — an unread badge staying stale is not worth surfacing an error for.
-    }
+    final newest = state.messages.last.id;
+    if (newest <= _lastMarkedRead) return;
+    _lastMarkedRead = newest;
+    ref
+        .read(apiServiceProvider)
+        .markRead(conversationId, userId: _currentUserId, lastReadMessageId: newest)
+        // Best-effort — an unread badge staying stale is not worth an error.
+        .catchError((Object _) {});
   }
 
   /// Sends text right away (retrying once on a dropped connection, see
@@ -196,20 +270,23 @@ class ConversationNotifier extends Notifier<ConversationState> {
       );
       if (!ref.mounted) return;
       state = state.copyWith(isSending: false);
-      _addSent(message);
+      await _addSent(message);
     } catch (e) {
       if (!ref.mounted) return;
       state = state.copyWith(isSending: false, error: 'Couldn\'t send: $e');
     }
   }
 
-  /// Your own sent message, from here or the outbox: added at once (the
-  /// socket only announces other people's messages), unless a reload got
-  /// there first.
-  void _addSent(ChatMessage message) {
-    if (state.messages.any((m) => m.id == message.id)) return;
-    state = state.copyWith(messages: [...state.messages, message]);
-    _markRead();
+  /// Your own sent message, from here or the outbox: stored at once so it
+  /// shows, then anything sent by others just before it is fetched too.
+  Future<void> _addSent(ChatMessage message) async {
+    if (message.seq <= 0 || message.json.isEmpty) return; // an older server
+    try {
+      await _store.upsertAll([remoteMessageFrom(message.json)]);
+      await _sync.onNewMessage(conversationId, message.seq);
+    } catch (_) {
+      // Shown anyway once the next sync runs.
+    }
   }
 }
 
@@ -218,5 +295,6 @@ class ConversationNotifier extends Notifier<ConversationState> {
 ///     (≈ ViewModel cleared when the screen leaves the back stack)
 ///   - `.family<..., int>`: keyed by conversation id, so
 ///     `ref.watch(conversationProvider(42))` ≈ `hiltViewModel(key = "42")`
-final conversationProvider =
-    NotifierProvider.autoDispose.family<ConversationNotifier, ConversationState, int>(ConversationNotifier.new);
+final conversationProvider = NotifierProvider.autoDispose.family<ConversationNotifier, ConversationState, int>(
+  ConversationNotifier.new,
+);

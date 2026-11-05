@@ -156,6 +156,9 @@ class ConversationSummary {
 class ChatMessage {
   final int id;
   final int conversationId;
+
+  /// Its place in the conversation: 1, 2, 3, ... (0 from an older server).
+  final int seq;
   final int senderId;
   final String body;
   final int createdAt;
@@ -164,19 +167,26 @@ class ChatMessage {
   /// Photos and videos, in the order the sender arranged them.
   final List<MediaAttachment> media;
 
+  /// The message exactly as the server sent it: what the device stores.
+  final Map<String, dynamic> json;
+
   ChatMessage({
     required this.id,
     required this.conversationId,
+    this.seq = 0,
     required this.senderId,
     required this.body,
     required this.createdAt,
     required this.senderUsername,
     this.media = const [],
+    this.json = const {},
   });
 
   factory ChatMessage.fromJson(Map<String, dynamic> json) => ChatMessage(
         id: json['id'] as int,
         conversationId: json['conversation_id'] as int,
+        seq: json['seq'] as int? ?? 0,
+        json: json,
         senderId: json['sender_id'] as int,
         body: json['body'] as String,
         createdAt: json['created_at'] as int,

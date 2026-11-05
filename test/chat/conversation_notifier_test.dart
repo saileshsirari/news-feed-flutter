@@ -15,11 +15,14 @@ import 'package:news_feed_flutter/session/current_user_provider.dart';
 import 'package:shared_media/shared_media.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../helpers/fake_chat_server.dart';
 import '../helpers/fake_socket.dart';
 
+/// Ids 10, 11, 12, ... are seqs 1, 2, 3, ... in conversation 5.
 Map<String, dynamic> message(int id, {int senderId = 2, String body = 'hi'}) => {
       'id': id,
       'conversation_id': 5,
+      'seq': id - 9,
       'sender_id': senderId,
       'body': body,
       'created_at': id,
@@ -33,14 +36,17 @@ void main() {
   final config = AppConfig(apiBaseUrl: Uri.parse('https://example.test'));
 
   late FakeSocket socket;
-  // What the fake server currently has, newest first (like the real API).
+  // What the fake server currently has.
   late List<Map<String, dynamic>> serverMessages;
   late List<http.Request> requests;
   // How many POSTs fail with a dropped connection before one gets through.
   late int failingPosts;
+  // The server answers nothing (offline).
+  late bool offline;
 
   setUp(() {
     failingPosts = 0;
+    offline = false;
     retryDelay = Duration.zero;
     // Logged in as user 1 (UserSession reads these keys).
     SharedPreferences.setMockInitialValues({'id': 1, 'username': 'user_0', 'followerCount': 0});
@@ -55,9 +61,10 @@ void main() {
       config,
       httpClient: MockClient((request) async {
         requests.add(request);
+        if (offline) throw http.ClientException('offline');
         final path = request.url.path;
         if (request.method == 'GET' && path == '/conversations/5/messages') {
-          return http.Response(jsonEncode({'messages': serverMessages, 'nextCursor': null}), 200);
+          return answerMessagesBySeq(request, serverMessages);
         }
         if (request.method == 'GET' && path == '/conversations/5/reads') {
           return http.Response(
@@ -74,7 +81,9 @@ void main() {
             throw http.ClientException('Connection reset by peer');
           }
           final body = jsonDecode(request.body) as Map<String, dynamic>;
-          return http.Response(jsonEncode(message(12, senderId: 1, body: body['body'] as String)), 200);
+          final sent = message(12, senderId: 1, body: body['body'] as String);
+          serverMessages = [...serverMessages.where((m) => m['id'] != 12), sent];
+          return http.Response(jsonEncode(sent), 200);
         }
         return http.Response('{}', 200); // PUT /read
       }),
@@ -82,6 +91,7 @@ void main() {
     final container = ProviderContainer.test(overrides: [
       apiServiceProvider.overrideWithValue(api),
       socketProvider.overrideWith((ref, userId) => socket),
+      ...localChatOverrides(),
     ]);
     await container.read(currentUserProvider.future);
     return container;
@@ -106,6 +116,38 @@ void main() {
     expect(sub.read().messages.map((m) => m.id), [10, 11]);
   });
 
+  test('history on the device shows even when the server can\'t be reached', () async {
+    final container = await openContainer();
+    final first = await open(container);
+    first.close();
+    await container.pump(); // the screen closed
+
+    offline = true;
+    final again = await open(container);
+    expect(again.read().messages.map((m) => m.id), [10, 11]);
+    expect(again.read().error, isNull);
+  });
+
+  test('scrolling up loads older pages until the first message', () async {
+    serverMessages = [for (var id = 10; id < 130; id++) message(id)]; // seqs 1..120
+    final container = await openContainer();
+    final sub = await open(container);
+    expect(sub.read().messages.length, 50); // the newest page
+    expect(sub.read().messages.first.seq, 71);
+    expect(sub.read().reachedStart, isFalse);
+
+    final notifier = container.read(conversationProvider(5).notifier);
+    await notifier.loadOlder();
+    await pumpEventQueue();
+    expect(sub.read().messages.first.seq, 21);
+
+    await notifier.loadOlder();
+    await pumpEventQueue();
+    expect(sub.read().messages.first.seq, 1);
+    expect(sub.read().messages.length, 120);
+    expect(sub.read().reachedStart, isTrue);
+  });
+
   test('read states drive the Seen tick', () async {
     final container = await openContainer();
     final sub = await open(container);
@@ -120,17 +162,20 @@ void main() {
     expect(sub.read().isReadByOthers(11, currentUserId: 1), isTrue);
   });
 
-  test('message_created for this conversation reloads; other conversations are ignored', () async {
+  test('message_created for this conversation fetches what is missing; other conversations are ignored', () async {
     final container = await openContainer();
     final sub = await open(container);
     serverMessages = [message(13), ...serverMessages];
 
-    socket.controller.add({'type': 'message_created', 'conversationId': 99});
+    socket.controller.add({'type': 'message_created', 'conversationId': 99, 'seq': 1});
     await pumpEventQueue();
     expect(sub.read().messages.map((m) => m.id), [10, 11]);
 
-    socket.controller.add({'type': 'message_created', 'conversationId': 5});
+    requests.clear();
+    socket.controller.add({'type': 'message_created', 'conversationId': 5, 'seq': 4});
     await pumpEventQueue();
+    // Only after seq 2: 12 (seq 3) never existed here, 13 is seq 4.
+    expect(requests.first.url.queryParameters['afterSeq'], '2');
     expect(sub.read().messages.map((m) => m.id), [10, 11, 13]);
     // ...and marks the new newest message read.
     expect(requests.last.method, 'PUT');
@@ -155,6 +200,7 @@ void main() {
     final sending = container.read(conversationProvider(5).notifier).send('  hello  ');
     expect(sub.read().isSending, isTrue);
     await sending;
+    await pumpEventQueue(); // the list follows the database
 
     expect(sub.read().isSending, isFalse);
     expect(sub.read().messages.last.body, 'hello');
@@ -195,6 +241,7 @@ void main() {
     failingPosts = 1;
 
     await container.read(conversationProvider(5).notifier).send('hello');
+    await pumpEventQueue();
 
     expect(posts(), hasLength(2));
     expect(posts()[1]['clientMessageId'], posts()[0]['clientMessageId']);

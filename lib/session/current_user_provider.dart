@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../chat/local/local_chat.dart';
 import '../data/services/api_service.dart';
 import '../data/services/service_providers.dart';
 import '../models/models.dart';
@@ -82,6 +83,15 @@ class CurrentUserNotifier extends AsyncNotifier<CurrentUser?> {
   }
 
   Future<void> logout() async {
+    // This user's chat history leaves the device with them (a shared
+    // browser or phone shouldn't keep it). Only if it was ever opened.
+    if (ref.exists(messageStoreProvider)) {
+      try {
+        await ref.read(messageStoreProvider).clear();
+      } on Object catch (_) {
+        // Still log out; the database is per user, so nobody else reads it.
+      }
+    }
     await ref.read(authSessionProvider)?.signOut();
     await ref.read(userSessionProvider).clear();
     state = const AsyncData(null);

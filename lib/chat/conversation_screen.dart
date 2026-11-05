@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_media/shared_media.dart';
+
 import '../presence/presence_widgets.dart';
 import '../call/call_screen.dart';
 import '../session/current_user_provider.dart';
@@ -68,12 +69,12 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
     final hasText = _controller.text.trim().isNotEmpty;
     final canSend = !draft.hasFailures && (draft.isEmpty ? hasText && !vm.isSending : true);
 
-    // Keep the newest message in view: jump there when the thread first
-    // loads, glide there when a message arrives or you send one. A side
-    // effect, so ref.listen (≈ `LaunchedEffect(messages.size) {
-    // listState.animateScrollToItem(last) }` in Compose).
-    ref.listen(conversationProvider(widget.conversationId).select((s) => s.messages.length), (previous, next) {
-      if (next > (previous ?? 0)) _scrollToBottom(animate: (previous ?? 0) > 0);
+    // Keep the newest message in view when one arrives or you send one. The
+    // list is reversed (newest at the bottom, offset 0), so older messages
+    // loading in at the top never move what you're reading, and "the bottom"
+    // is just offset 0.
+    ref.listen(conversationProvider(widget.conversationId).select((s) => s.messages.lastOrNull?.id), (previous, next) {
+      if (next != null && next != previous) _scrollToBottom(animate: previous != null);
     });
     ref.listen(chatOutboxProvider(widget.conversationId).select((s) => s.pending.length), (previous, next) {
       if (next > (previous ?? 0)) _scrollToBottom(animate: true);
@@ -111,30 +112,53 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
           Expanded(
             child: vm.isLoading
                 ? const Center(child: CircularProgressIndicator())
-                : ListView.builder(
-                    controller: _scrollController,
-                    padding: const EdgeInsets.all(8),
-                    // Sent messages, then yours still uploading at the bottom.
-                    itemCount: vm.messages.length + outbox.pending.length,
-                    itemBuilder: (context, index) {
-                      if (index >= vm.messages.length) {
-                        return _PendingBubble(
-                          conversationId: widget.conversationId,
-                          message: outbox.pending[index - vm.messages.length],
-                        );
+                : NotificationListener<ScrollNotification>(
+                    // Near the top (the end of a reversed list): load older.
+                    onNotification: (notification) {
+                      final position = notification.metrics;
+                      if (position.extentAfter < 400) {
+                        ref.read(conversationProvider(widget.conversationId).notifier).loadOlder();
                       }
-                      final message = vm.messages[index];
-                      final isMine = message.senderId == currentUserId;
-                      // Only the current user's most recent message can show
-                      // a "Seen" tick — same single-indicator convention as
-                      // WhatsApp, rather than a tick per message.
-                      final isLastOfMine = isMine && index == vm.messages.lastIndexWhere((m) => m.senderId == currentUserId);
-                      return _MessageBubble(
-                        message: message,
-                        isMine: isMine,
-                        showSeen: isLastOfMine && vm.isReadByOthers(message.id, currentUserId: currentUserId),
-                      );
+                      return false;
                     },
+                    child: ListView.builder(
+                      controller: _scrollController,
+                      reverse: true,
+                      padding: const EdgeInsets.all(8),
+                      // From the bottom: yours still uploading, then sent
+                      // messages newest first, then a spinner at the top
+                      // while older ones load.
+                      itemCount: outbox.pending.length + vm.messages.length + (vm.isLoadingOlder ? 1 : 0),
+                      itemBuilder: (context, index) {
+                        final pendingCount = outbox.pending.length;
+                        if (index < pendingCount) {
+                          return _PendingBubble(
+                            conversationId: widget.conversationId,
+                            message: outbox.pending[pendingCount - 1 - index],
+                          );
+                        }
+                        final fromNewest = index - pendingCount;
+                        if (fromNewest >= vm.messages.length) {
+                          return const Padding(
+                            padding: EdgeInsets.all(12),
+                            child: Center(child: CircularProgressIndicator()),
+                          );
+                        }
+                        final messageIndex = vm.messages.length - 1 - fromNewest;
+                        final message = vm.messages[messageIndex];
+                        final isMine = message.senderId == currentUserId;
+                        // Only the current user's most recent message can show
+                        // a "Seen" tick — same single-indicator convention as
+                        // WhatsApp, rather than a tick per message.
+                        final isLastOfMine =
+                            isMine && messageIndex == vm.messages.lastIndexWhere((m) => m.senderId == currentUserId);
+                        return _MessageBubble(
+                          message: message,
+                          isMine: isMine,
+                          showSeen: isLastOfMine && vm.isReadByOthers(message.id, currentUserId: currentUserId),
+                        );
+                      },
+                    ),
                   ),
           ),
           SafeArea(
@@ -179,11 +203,11 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
   void _scrollToBottom({required bool animate}) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!_scrollController.hasClients) return;
-      final bottom = _scrollController.position.maxScrollExtent;
+      // Reversed list: the bottom is offset 0.
       if (animate) {
-        _scrollController.animateTo(bottom, duration: const Duration(milliseconds: 250), curve: Curves.easeOut);
+        _scrollController.animateTo(0, duration: const Duration(milliseconds: 250), curve: Curves.easeOut);
       } else {
-        _scrollController.jumpTo(bottom);
+        _scrollController.jumpTo(0);
       }
     });
   }
@@ -227,11 +251,7 @@ class _MessageBubble extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              if (!isMine)
-                Text(
-                  '@${message.senderUsername}',
-                  style: Theme.of(context).textTheme.labelSmall,
-                ),
+              if (!isMine) Text('@${message.senderUsername}', style: Theme.of(context).textTheme.labelSmall),
               if (message.media.isNotEmpty)
                 Padding(
                   padding: const EdgeInsets.symmetric(vertical: 4),
@@ -279,16 +299,12 @@ class _PendingBubble extends ConsumerWidget {
             margin: const EdgeInsets.symmetric(vertical: 4),
             padding: const EdgeInsets.all(8),
             constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.75),
-            decoration: BoxDecoration(
-              color: colorScheme.primaryContainer,
-              borderRadius: BorderRadius.circular(12),
-            ),
+            decoration: BoxDecoration(color: colorScheme.primaryContainer, borderRadius: BorderRadius.circular(12)),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 PendingMediaGrid(draftKey: message.draftKey),
-                if (message.body.isNotEmpty)
-                  Padding(padding: const EdgeInsets.only(top: 6), child: Text(message.body)),
+                if (message.body.isNotEmpty) Padding(padding: const EdgeInsets.only(top: 6), child: Text(message.body)),
               ],
             ),
           ),

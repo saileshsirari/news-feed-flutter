@@ -135,6 +135,30 @@ class ApiService {
     return MessagePage.fromJson(_decodeObject(res));
   }
 
+  /// Sync: the messages after [afterSeq] (oldest first), or before
+  /// [beforeSeq] (newest first), as the server sent them.
+  Future<({List<Map<String, dynamic>> messages, bool hasMore})> getMessagesBySeq(
+    int conversationId,
+    int userId, {
+    int? afterSeq,
+    int? beforeSeq,
+    required int limit,
+  }) async {
+    final res = await _http.get(
+      _uri('/conversations/$conversationId/messages', {
+        'userId': userId,
+        'limit': limit,
+        'afterSeq': ?afterSeq,
+        'beforeSeq': ?beforeSeq,
+      }),
+    );
+    final json = _decodeObject(res);
+    return (
+      messages: (json['messages'] as List).cast<Map<String, dynamic>>(),
+      hasMore: json['hasMore'] as bool? ?? false,
+    );
+  }
+
   /// [clientMessageId] identifies this send: sending again with the same
   /// one returns the first message instead of posting it twice.
   Future<ChatMessage> sendMessage(
