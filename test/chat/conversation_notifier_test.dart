@@ -43,10 +43,16 @@ void main() {
   late int failingPosts;
   // The server answers nothing (offline).
   late bool offline;
+  // Everyone's read pointer, as GET /conversations/5/reads returns it.
+  late List<Map<String, int>> readStates;
 
   setUp(() {
     failingPosts = 0;
     offline = false;
+    readStates = [
+      {'user_id': 1, 'last_read_message_id': 11},
+      {'user_id': 2, 'last_read_message_id': 10},
+    ];
     retryDelay = Duration.zero;
     // Logged in as user 1 (UserSession reads these keys).
     SharedPreferences.setMockInitialValues({'id': 1, 'username': 'user_0', 'followerCount': 0});
@@ -67,13 +73,7 @@ void main() {
           return answerMessagesBySeq(request, serverMessages);
         }
         if (request.method == 'GET' && path == '/conversations/5/reads') {
-          return http.Response(
-            jsonEncode([
-              {'user_id': 1, 'last_read_message_id': 11},
-              {'user_id': 2, 'last_read_message_id': 10},
-            ]),
-            200,
-          );
+          return http.Response(jsonEncode(readStates), 200);
         }
         if (request.method == 'POST' && path == '/conversations/5/messages') {
           if (failingPosts > 0) {
@@ -160,6 +160,32 @@ void main() {
     await pumpEventQueue();
 
     expect(sub.read().isReadByOthers(11, currentUserId: 1), isTrue);
+  });
+
+  test('in a group, Seen waits until every other member has read it', () async {
+    // Me (1), ann (2) who has read 11, and bob (3) who never opened the chat.
+    readStates = [
+      {'user_id': 1, 'last_read_message_id': 11},
+      {'user_id': 2, 'last_read_message_id': 11},
+      {'user_id': 3, 'last_read_message_id': 0},
+    ];
+    final container = await openContainer();
+    final sub = await open(container);
+    expect(sub.read().isReadByOthers(11, currentUserId: 1), isFalse); // bob hasn't
+
+    socket.controller.add({'type': 'read_receipt_updated', 'conversationId': 5, 'userId': 3, 'lastReadMessageId': 10});
+    await pumpEventQueue();
+    expect(sub.read().isReadByOthers(11, currentUserId: 1), isFalse); // bob is only up to 10
+    expect(sub.read().isReadByOthers(10, currentUserId: 1), isTrue);
+
+    socket.controller.add({'type': 'read_receipt_updated', 'conversationId': 5, 'userId': 3, 'lastReadMessageId': 11});
+    await pumpEventQueue();
+    expect(sub.read().isReadByOthers(11, currentUserId: 1), isTrue); // now everyone has
+
+    // My own read pointer (from my other device) never counts as "seen".
+    socket.controller.add({'type': 'read_receipt_updated', 'conversationId': 5, 'userId': 1, 'lastReadMessageId': 99});
+    await pumpEventQueue();
+    expect(sub.read().isReadByOthers(12, currentUserId: 1), isFalse);
   });
 
   test('message_created for this conversation fetches what is missing; other conversations are ignored', () async {
