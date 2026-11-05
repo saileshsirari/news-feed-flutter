@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:video_player/video_player.dart';
 
 import '../models/media_attachment.dart';
@@ -77,6 +78,17 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                 icon: const Icon(Icons.close, color: Colors.white),
                 tooltip: 'Close',
                 onPressed: () => Navigator.of(context).pop(),
+              ),
+            ),
+            Positioned(
+              top: 4,
+              right: 4,
+              child: IconButton(
+                icon: const Icon(Icons.download, color: Colors.white),
+                tooltip: 'Download',
+                // The browser (web) or the phone's browser/downloads saves
+                // it; the link is the same short-lived one we play.
+                onPressed: () => launchUrl(widget.media.url, mode: LaunchMode.externalApplication),
               ),
             ),
             Positioned(
