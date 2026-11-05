@@ -1,0 +1,4 @@
+.dart_tool/
+build/
+# A package, not an app: the app that uses it locks versions.
+pubspec.lock
