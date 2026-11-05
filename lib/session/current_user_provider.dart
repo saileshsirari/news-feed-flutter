@@ -84,13 +84,17 @@ class CurrentUserNotifier extends AsyncNotifier<CurrentUser?> {
 
   Future<void> logout() async {
     // This user's chat history leaves the device with them (a shared
-    // browser or phone shouldn't keep it). Only if it was ever opened.
-    if (ref.exists(messageStoreProvider)) {
+    // browser or phone shouldn't keep it), and their database closes. It's
+    // open whenever someone is logged in (HomeScreen syncs chats), so only
+    // an open one needs clearing; no point opening one to empty it.
+    final userId = state.value?.id;
+    if (userId != null && ref.exists(chatDatabaseProvider(userId))) {
       try {
-        await ref.read(messageStoreProvider).clear();
+        await ref.read(messageStoreProvider(userId)).clear().timeout(const Duration(seconds: 5));
       } on Object catch (_) {
         // Still log out; the database is per user, so nobody else reads it.
       }
+      ref.invalidate(chatDatabaseProvider(userId));
     }
     await ref.read(authSessionProvider)?.signOut();
     await ref.read(userSessionProvider).clear();

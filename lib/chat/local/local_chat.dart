@@ -6,7 +6,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../data/services/api_service.dart';
 import '../../data/services/service_providers.dart';
 import '../../models/models.dart';
-import '../../session/current_user_provider.dart';
 
 /// Plugs the app into chat_store: how to reach the server (this API), and
 /// how a stored message becomes a ChatMessage again (its JSON).
@@ -45,21 +44,22 @@ class ApiMessageSource implements MessageSource {
   }
 }
 
-/// The signed-in user's chat database: one per user, so a shared browser or
-/// a second account never mixes histories (and logout deletes it, see
-/// CurrentUserNotifier.logout). Tests override it with an in-memory one.
-final chatDatabaseProvider = Provider<ChatDatabase>((ref) {
-  final userId = ref.watch(currentUserProvider.select((s) => s.value?.id));
-  if (userId == null) throw StateError('no chat database without a signed-in user');
+/// A user's chat database: one per user, so a shared browser or a second
+/// account never mixes histories (and logout deletes it, see
+/// CurrentUserNotifier.logout). Keyed by user id rather than reading "who's
+/// signed in", so logging out can clear it without the login state
+/// depending on itself. Tests override it with an in-memory one.
+final chatDatabaseProvider = Provider.family<ChatDatabase, int>((ref, userId) {
   final db = openChatDatabase('chat_user_$userId');
   ref.onDispose(db.close);
   return db;
 });
 
-final messageStoreProvider = Provider<MessageStore>((ref) => MessageStore(ref.watch(chatDatabaseProvider)));
+final messageStoreProvider = Provider.family<MessageStore, int>(
+  (ref, userId) => MessageStore(ref.watch(chatDatabaseProvider(userId))),
+);
 
-final chatSyncProvider = Provider<ChatSync>((ref) {
-  final userId = ref.watch(currentUserProvider.select((s) => s.value?.id));
-  if (userId == null) throw StateError('no chat sync without a signed-in user');
-  return ChatSync(ref.watch(messageStoreProvider), ApiMessageSource(ref.watch(apiServiceProvider), userId));
-});
+final chatSyncProvider = Provider.family<ChatSync, int>(
+  (ref, userId) =>
+      ChatSync(ref.watch(messageStoreProvider(userId)), ApiMessageSource(ref.watch(apiServiceProvider), userId)),
+);

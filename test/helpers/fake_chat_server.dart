@@ -7,7 +7,7 @@ import 'package:news_feed_flutter/chat/local/local_chat.dart';
 
 /// The chat database in memory, for a test's ProviderContainer/ProviderScope.
 List<Override> localChatOverrides() => [
-  chatDatabaseProvider.overrideWith((ref) {
+  chatDatabaseProvider.overrideWith((ref, userId) {
     final db = inMemoryChatDatabase();
     ref.onDispose(db.close);
     return db;

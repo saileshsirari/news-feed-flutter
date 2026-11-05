@@ -71,7 +71,7 @@ void main() {
     await tester.pumpAndSettle();
     final container = ProviderScope.containerOf(tester.element(find.byType(MessageSearchScreen)));
     await tester.runAsync(
-      () => container.read(messageStoreProvider).upsertAll([for (final m in messages) remoteMessageFrom(m)]),
+      () => container.read(messageStoreProvider(1)).upsertAll([for (final m in messages) remoteMessageFrom(m)]),
     );
   }
 

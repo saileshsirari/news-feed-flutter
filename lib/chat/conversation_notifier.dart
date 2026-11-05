@@ -151,8 +151,8 @@ class ConversationNotifier extends Notifier<ConversationState> {
     // ref.read, not watch: the user can't change while a chat is open, and
     // watching would rebuild this dying notifier on logout.
     _currentUserId = ref.read(currentUserProvider).requireValue!.id;
-    _store = ref.read(messageStoreProvider);
-    _sync = ref.read(chatSyncProvider);
+    _store = ref.read(messageStoreProvider(_currentUserId));
+    _sync = ref.read(chatSyncProvider(_currentUserId));
     // watch keeps the shared socket alive while this chat is open.
     final socket = ref.watch(socketProvider(_currentUserId));
     final sub = socket.events.listen(_onEvent);

@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/models.dart';
+import '../../session/current_user_provider.dart';
 import '../conversation_screen.dart';
 import '../conversations_notifier.dart';
 import '../local/local_chat.dart';
@@ -41,7 +42,8 @@ class _MessageSearchScreenState extends ConsumerState<MessageSearchScreen> {
   }
 
   Future<void> _search(String text) async {
-    final hits = await ref.read(messageStoreProvider).search(text);
+    final userId = ref.read(currentUserProvider).requireValue!.id;
+    final hits = await ref.read(messageStoreProvider(userId)).search(text);
     if (!mounted) return;
     setState(() {
       _hits = hits;

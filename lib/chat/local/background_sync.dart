@@ -99,8 +99,8 @@ final chatBackgroundSyncProvider = Provider.autoDispose<ChatBackgroundSync?>((re
   final background = ChatBackgroundSync(
     userId: userId,
     api: ref.watch(apiServiceProvider),
-    sync: ref.watch(chatSyncProvider),
-    store: ref.watch(messageStoreProvider),
+    sync: ref.watch(chatSyncProvider(userId)),
+    store: ref.watch(messageStoreProvider(userId)),
     events: ref.watch(socketProvider(userId)).events,
   );
   ref.onDispose(background.dispose);
