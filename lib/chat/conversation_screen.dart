@@ -8,6 +8,7 @@ import '../session/current_user_provider.dart';
 import '../models/models.dart';
 import 'chat_outbox.dart';
 import 'conversation_notifier.dart';
+import 'message_info_sheet.dart';
 
 /// Compose/Android: ≈ a screen composable doing
 /// `val state by vm.state.collectAsState()` with
@@ -147,15 +148,13 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
                         final messageIndex = vm.messages.length - 1 - fromNewest;
                         final message = vm.messages[messageIndex];
                         final isMine = message.senderId == currentUserId;
-                        // Only the current user's most recent message can show
-                        // a "Seen" tick — same single-indicator convention as
-                        // WhatsApp, rather than a tick per message.
-                        final isLastOfMine =
-                            isMine && messageIndex == vm.messages.lastIndexWhere((m) => m.senderId == currentUserId);
+                        // Every message of yours shows how far it got (✓, ✓✓,
+                        // blue ✓✓); long-press for who has read it.
                         return _MessageBubble(
                           message: message,
                           isMine: isMine,
-                          showSeen: isLastOfMine && vm.isReadByOthers(message.id, currentUserId: currentUserId),
+                          tick: isMine ? vm.tickFor(message.id, currentUserId: currentUserId) : null,
+                          onLongPress: isMine ? () => showMessageInfo(context, message, vm, currentUserId) : null,
                         );
                       },
                     ),
@@ -231,45 +230,57 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
 class _MessageBubble extends StatelessWidget {
   final ChatMessage message;
   final bool isMine;
-  final bool showSeen;
-  const _MessageBubble({required this.message, required this.isMine, this.showSeen = false});
+
+  /// How far it got (your messages only).
+  final MessageTick? tick;
+  final VoidCallback? onLongPress;
+  const _MessageBubble({required this.message, required this.isMine, this.tick, this.onLongPress});
 
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final time = TimeOfDay.fromDateTime(DateTime.fromMillisecondsSinceEpoch(message.createdAt)).format(context);
     return Column(
       crossAxisAlignment: isMine ? CrossAxisAlignment.end : CrossAxisAlignment.start,
       children: [
-        Container(
-          margin: const EdgeInsets.symmetric(vertical: 4),
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.75),
-          decoration: BoxDecoration(
-            color: isMine ? colorScheme.primaryContainer : colorScheme.surfaceContainerHighest,
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              if (!isMine) Text('@${message.senderUsername}', style: Theme.of(context).textTheme.labelSmall),
-              if (message.media.isNotEmpty)
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 4),
-                  // Tapping a video plays it full screen (MediaGrid's default).
-                  child: MediaGrid(media: message.media),
+        GestureDetector(
+          onLongPress: onLongPress,
+          child: Container(
+            margin: const EdgeInsets.symmetric(vertical: 4),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.75),
+            decoration: BoxDecoration(
+              color: isMine ? colorScheme.primaryContainer : colorScheme.surfaceContainerHighest,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (!isMine) Text('@${message.senderUsername}', style: Theme.of(context).textTheme.labelSmall),
+                if (message.media.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    // Tapping a video plays it full screen (MediaGrid's default).
+                    child: MediaGrid(media: message.media),
+                  ),
+                if (message.body.isNotEmpty) Text(message.body),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        time,
+                        style: Theme.of(context).textTheme.labelSmall?.copyWith(color: colorScheme.onSurfaceVariant),
+                      ),
+                      if (tick != null) Padding(padding: const EdgeInsets.only(left: 4), child: TickIcon(tick!)),
+                    ],
+                  ),
                 ),
-              if (message.body.isNotEmpty) Text(message.body),
-            ],
-          ),
-        ),
-        if (showSeen)
-          Padding(
-            padding: const EdgeInsets.only(right: 4, bottom: 4),
-            child: Text(
-              'Seen',
-              style: Theme.of(context).textTheme.labelSmall?.copyWith(color: colorScheme.onSurfaceVariant),
+              ],
             ),
           ),
+        ),
       ],
     );
   }
@@ -326,7 +337,7 @@ class _PendingBubble extends ConsumerWidget {
                   ],
                 )
               : Text(
-                  message.status == PendingStatus.sending ? 'Sending…' : 'Uploading…',
+                  message.status == PendingStatus.sending ? '🕓 Sending…' : '🕓 Uploading…',
                   style: textTheme.labelSmall?.copyWith(color: colorScheme.onSurfaceVariant),
                 ),
         ),

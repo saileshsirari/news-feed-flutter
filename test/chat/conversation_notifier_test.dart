@@ -172,6 +172,18 @@ void main() {
     final container = await openContainer();
     final sub = await open(container);
     expect(sub.read().isReadByOthers(11, currentUserId: 1), isFalse); // bob hasn't
+    expect(sub.read().tickFor(11, currentUserId: 1), MessageTick.sent); // bob doesn't even have it
+
+    // bob's phone received it (not read yet): ✓✓.
+    socket.controller.add({
+      'type': 'read_receipt_updated',
+      'conversationId': 5,
+      'userId': 3,
+      'lastReadMessageId': 0,
+      'lastDeliveredMessageId': 11,
+    });
+    await pumpEventQueue();
+    expect(sub.read().tickFor(11, currentUserId: 1), MessageTick.delivered);
 
     socket.controller.add({'type': 'read_receipt_updated', 'conversationId': 5, 'userId': 3, 'lastReadMessageId': 10});
     await pumpEventQueue();

@@ -6,6 +6,7 @@ import '../chat/conversations_list_screen.dart';
 import '../data/services/socket_provider.dart';
 import '../feed/feed_screen.dart';
 import '../session/current_user_provider.dart';
+import '../chat/local/background_sync.dart';
 
 /// Two tabs: the existing feed, and the new chat/contacts list. Only exists
 /// while someone is logged in (see main.dart's _RootScreen), and both tabs
@@ -53,6 +54,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // While signed in with the app open: new messages in any chat reach
+    // this device and are reported delivered (see background_sync.dart).
+    ref.watch(chatBackgroundSyncProvider);
     final screens = [
       const FeedScreen(),
       const ConversationsListScreen(),

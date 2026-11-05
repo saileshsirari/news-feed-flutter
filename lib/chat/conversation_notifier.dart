@@ -6,10 +6,17 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../data/services/service_providers.dart';
 import '../data/services/socket_provider.dart';
 import '../models/models.dart';
+
 import '../session/current_user_provider.dart';
 import 'chat_outbox.dart';
 import 'local/local_chat.dart';
 import 'message_sender.dart';
+
+/// Where one of your messages has got to, like WhatsApp's ticks: on the
+/// server (✓), on every other member's device (✓✓), read by every other
+/// member (blue ✓✓). In a group it takes everyone, so one member who hasn't
+/// opened the chat keeps it from going blue.
+enum MessageTick { sent, delivered, read }
 
 /// Everything ConversationScreen draws, as one immutable value.
 ///
@@ -26,6 +33,8 @@ class ConversationState {
     this.isSending = false,
     this.messages = const [],
     this.readStateByUserId = const {},
+    this.deliveredByUserId = const {},
+    this.usernameByUserId = const {},
     this.isLoadingOlder = false,
     this.reachedStart = false,
   });
@@ -49,6 +58,22 @@ class ConversationState {
   /// every change.
   final Map<int, int> readStateByUserId;
 
+  /// Every participant's delivered pointer (at least their read pointer).
+  final Map<int, int> deliveredByUserId;
+
+  /// Every participant's name, for "Message info".
+  final Map<int, String> usernameByUserId;
+
+  /// The tick for one of [currentUserId]'s messages; null until the
+  /// participants are known.
+  MessageTick? tickFor(int messageId, {required int currentUserId}) {
+    final others = {...readStateByUserId.keys, ...deliveredByUserId.keys}.where((id) => id != currentUserId);
+    if (others.isEmpty) return null;
+    if (others.every((id) => (readStateByUserId[id] ?? 0) >= messageId)) return MessageTick.read;
+    if (others.every((id) => (deliveredByUserId[id] ?? 0) >= messageId)) return MessageTick.delivered;
+    return MessageTick.sent;
+  }
+
   /// True once every *other* participant has read up to [messageId] — the
   /// "Seen" tick shown under the current user's own last message. Returns
   /// false (not "unknown") before the initial read-state fetch completes, so
@@ -67,6 +92,8 @@ class ConversationState {
     bool? isSending,
     List<ChatMessage>? messages,
     Map<int, int>? readStateByUserId,
+    Map<int, int>? deliveredByUserId,
+    Map<int, String>? usernameByUserId,
     bool? isLoadingOlder,
     bool? reachedStart,
   }) {
@@ -76,6 +103,8 @@ class ConversationState {
       isSending: isSending ?? this.isSending,
       messages: messages ?? this.messages,
       readStateByUserId: readStateByUserId ?? this.readStateByUserId,
+      deliveredByUserId: deliveredByUserId ?? this.deliveredByUserId,
+      usernameByUserId: usernameByUserId ?? this.usernameByUserId,
       isLoadingOlder: isLoadingOlder ?? this.isLoadingOlder,
       reachedStart: reachedStart ?? this.reachedStart,
     );
@@ -220,8 +249,12 @@ class ConversationNotifier extends Notifier<ConversationState> {
       return;
     }
     if (event['type'] == 'read_receipt_updated') {
+      final userId = event['userId'] as int;
+      final read = event['lastReadMessageId'] as int;
+      final delivered = event['lastDeliveredMessageId'] as int? ?? read;
       state = state.copyWith(
-        readStateByUserId: {...state.readStateByUserId, event['userId'] as int: event['lastReadMessageId'] as int},
+        readStateByUserId: {...state.readStateByUserId, userId: read},
+        deliveredByUserId: {...state.deliveredByUserId, userId: delivered > read ? delivered : read},
       );
     }
   }
@@ -234,6 +267,8 @@ class ConversationNotifier extends Notifier<ConversationState> {
       if (!ref.mounted) return;
       state = state.copyWith(
         readStateByUserId: {...state.readStateByUserId, for (final s in states) s.userId: s.lastReadMessageId},
+        deliveredByUserId: {...state.deliveredByUserId, for (final s in states) s.userId: s.lastDeliveredMessageId},
+        usernameByUserId: {for (final s in states) s.userId: s.username},
       );
     } catch (_) {
       // Best-effort — the conversation still works with no "seen" indicator.

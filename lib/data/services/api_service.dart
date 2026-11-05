@@ -200,6 +200,17 @@ class ApiService {
     if (res.statusCode >= 400) throw ApiException(res.statusCode, res.body);
   }
 
+  /// One of this user's devices now has the conversation up to
+  /// [lastDeliveredMessageId] (the sender's ✓✓).
+  Future<void> markDelivered(int conversationId, {required int userId, required int lastDeliveredMessageId}) async {
+    final res = await _http.put(
+      _uri('/conversations/$conversationId/delivered'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'userId': userId, 'lastDeliveredMessageId': lastDeliveredMessageId}),
+    );
+    if (res.statusCode >= 400) throw ApiException(res.statusCode, res.body);
+  }
+
   Future<CallToken> getCallToken(int conversationId, int userId) async {
     final res = await _http.get(_uri('/conversations/$conversationId/call-token', {'userId': userId}));
     return CallToken.fromJson(_decodeObject(res));

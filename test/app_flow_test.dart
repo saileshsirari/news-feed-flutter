@@ -14,6 +14,7 @@ import 'package:news_feed_flutter/session/device_registration.dart';
 import 'package:oidc_auth/oidc_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'helpers/fake_chat_server.dart';
 import 'helpers/fake_socket.dart';
 
 /// The whole app against a fake server: every screen and notifier builds
@@ -67,7 +68,11 @@ void main() {
 
     await tester.pumpWidget(
       ProviderScope(
-        overrides: [apiServiceProvider.overrideWithValue(api), socketProvider.overrideWith((ref, userId) => socket)],
+        overrides: [
+          apiServiceProvider.overrideWithValue(api),
+          socketProvider.overrideWith((ref, userId) => socket),
+          ...localChatOverrides(),
+        ],
         child: const NewsFeedApp(),
       ),
     );
@@ -159,6 +164,7 @@ void main() {
           apiServiceProvider.overrideWithValue(api),
           socketProvider.overrideWith((ref, userId) => socket),
           deviceDescriptionProvider.overrideWithValue(() async => (name: 'Test phone', platform: 'android')),
+          ...localChatOverrides(),
         ],
         child: const NewsFeedApp(),
       ),

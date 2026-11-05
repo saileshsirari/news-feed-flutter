@@ -123,6 +123,9 @@ class ConversationSummary {
   final int? otherUserId;
   final String? lastMessageBody;
   final int? lastMessageCreatedAt;
+
+  /// The newest message's seq: a device behind it has news to sync.
+  final int lastSeq;
   final int unreadCount;
 
   ConversationSummary({
@@ -133,6 +136,7 @@ class ConversationSummary {
     this.otherUserId,
     this.lastMessageBody,
     this.lastMessageCreatedAt,
+    this.lastSeq = 0,
     required this.unreadCount,
   });
 
@@ -149,6 +153,7 @@ class ConversationSummary {
         otherUserId: json['other_user_id'] as int?,
         lastMessageBody: json['last_message_body'] as String?,
         lastMessageCreatedAt: json['last_message_created_at'] as int?,
+        lastSeq: json['last_seq'] as int? ?? 0,
         unreadCount: json['unread_count'] as int,
       );
 }
@@ -201,13 +206,24 @@ class ChatMessage {
 /// of these per participant (0 for anyone who's never opened it).
 class ReadState {
   final int userId;
+  final String username;
   final int lastReadMessageId;
 
-  ReadState({required this.userId, required this.lastReadMessageId});
+  /// How far this member's devices have received the chat (✓✓ grey).
+  final int lastDeliveredMessageId;
+
+  ReadState({
+    required this.userId,
+    this.username = '',
+    required this.lastReadMessageId,
+    int? lastDeliveredMessageId,
+  }) : lastDeliveredMessageId = lastDeliveredMessageId ?? lastReadMessageId;
 
   factory ReadState.fromJson(Map<String, dynamic> json) => ReadState(
         userId: json['user_id'] as int,
+        username: json['username'] as String? ?? '',
         lastReadMessageId: json['last_read_message_id'] as int,
+        lastDeliveredMessageId: json['last_delivered_message_id'] as int?,
       );
 }
 
