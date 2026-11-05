@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'data/services/media_providers.dart';
+import 'data/services/service_providers.dart';
 import 'feed/login_screen.dart';
 import 'home/home_screen.dart';
 import 'session/current_user_provider.dart';
@@ -48,7 +49,12 @@ class _RootScreen extends ConsumerWidget {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
     if (session.value == null) {
-      return LoginScreen(onLogin: ref.read(currentUserProvider.notifier).login);
+      final notifier = ref.read(currentUserProvider.notifier);
+      return LoginScreen(
+        onLogin: notifier.login,
+        // Only when sign-in is configured (always, outside tests).
+        onSignIn: ref.watch(authSessionProvider) == null ? null : notifier.signIn,
+      );
     }
     return const HomeScreen();
   }

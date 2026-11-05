@@ -35,6 +35,9 @@ class ApiService {
     return jsonDecode(res.body) as List<dynamic>;
   }
 
+  /// Who the access token belongs to (created on first sign-in).
+  Future<User> getMe() async => User.fromJson(_decodeObject(await _http.get(_uri('/me'))));
+
   Future<User> getUserByUsername(String username) async {
     final res = await _http.get(_uri('/users', {'username': username}));
     return User.fromJson(_decodeObject(res));

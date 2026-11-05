@@ -24,7 +24,11 @@ import 'service_providers.dart';
 ///         cleared when its screen leaves the back stack
 ///   - `ref.onDispose(socket.disconnect)` ≈ `ViewModel.onCleared()`
 final socketProvider = Provider.autoDispose.family<AppSocket, int>((ref, userId) {
-  final socket = AppSocket(userId, ref.watch(appConfigProvider))..connect();
+  final socket = AppSocket(
+    userId,
+    ref.watch(appConfigProvider),
+    accessToken: ref.watch(authSessionProvider)?.accessToken,
+  )..connect();
   ref.onDispose(socket.disconnect);
   return socket;
 });

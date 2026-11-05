@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<!--
+  Where Zitadel sends the browser back after sign-in on the web
+  (http://localhost:8766/redirect.html, registered in the web app's
+  redirect URIs). The sign-in page opened in a popup; this hands the URL,
+  with its one-time code, back to the app window that opened it, then
+  closes. Only to our own origin, so no other site can read the code.
+-->
+<meta charset="utf-8">
+<title>Signing in…</title>
+<p>Signing in… If this window doesn't close by itself, you can close it.</p>
+<script>
+  const message = { 'flutter-web-auth-2': window.location.href };
+  if (window.opener) {
+    window.opener.postMessage(message, window.location.origin);
+    window.close();
+  } else if (window.parent && window.parent !== window) {
+    window.parent.postMessage(message, window.location.origin);
+  } else {
+    localStorage.setItem('flutter-web-auth-2', window.location.href);
+    window.close();
+  }
+</script>

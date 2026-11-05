@@ -9,6 +9,7 @@ import 'package:news_feed_flutter/data/services/api_service.dart';
 import 'package:news_feed_flutter/data/services/service_providers.dart';
 import 'package:news_feed_flutter/data/services/socket_provider.dart';
 import 'package:news_feed_flutter/session/current_user_provider.dart';
+import 'package:oidc_auth/oidc_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
@@ -23,13 +24,13 @@ void main() {
   ProviderContainer containerReturning(Map<String, dynamic>? user) {
     final api = ApiService(
       config,
-      httpClient: MockClient((request) async =>
-          user == null ? http.Response('not found', 404) : http.Response(jsonEncode(user), 200)),
+      httpClient: MockClient(
+        (request) async => user == null ? http.Response('not found', 404) : http.Response(jsonEncode(user), 200),
+      ),
     );
-    return ProviderContainer.test(overrides: [
-      appConfigProvider.overrideWithValue(config),
-      apiServiceProvider.overrideWithValue(api),
-    ]);
+    return ProviderContainer.test(
+      overrides: [appConfigProvider.overrideWithValue(config), apiServiceProvider.overrideWithValue(api)],
+    );
   }
 
   const celebrity = {'id': 7, 'username': 'celebrity', 'created_at': 0, 'followerCount': 1000};
@@ -93,5 +94,65 @@ void main() {
     // listener gets a brand-new connection.
     final c = container.listen(socketProvider(7), (_, _) {});
     expect(c.read(), isNot(same(first)));
+  });
+
+  group('with a saved sign-in', () {
+    /// An AuthSession that already holds tokens (as after an earlier sign-in).
+    AuthSession signedIn(MemoryTokenStore store, List<String> providerCalls) => AuthSession(
+      client: OidcClient(
+        OidcConfig(issuer: Uri.parse('https://issuer.test'), clientId: 'app', redirectUri: Uri.parse('x:/cb')),
+        httpClient: MockClient((request) async {
+          providerCalls.add(request.url.path);
+          return request.url.path == '/.well-known/openid-configuration'
+              ? http.Response(
+                  jsonEncode({
+                    'authorization_endpoint': 'https://issuer.test/a',
+                    'token_endpoint': 'https://issuer.test/t',
+                    'revocation_endpoint': 'https://issuer.test/r',
+                  }),
+                  200,
+                )
+              : http.Response('', 200);
+        }),
+      ),
+      store: store,
+    );
+
+    ProviderContainer containerWith(AuthSession auth, http.Response Function(http.Request) server) =>
+        ProviderContainer.test(
+          overrides: [
+            appConfigProvider.overrideWithValue(config),
+            authSessionProvider.overrideWithValue(auth),
+            apiServiceProvider.overrideWithValue(
+              ApiService(config, httpClient: AuthorizedClient(auth.accessToken, MockClient((r) async => server(r)))),
+            ),
+          ],
+        );
+
+    TokenSet saved() => TokenSet(
+      accessToken: 'token-1',
+      refreshToken: 'refresh-1',
+      expiresAt: DateTime.now().add(const Duration(hours: 1)),
+    );
+
+    test('starts as the user the server says the token belongs to', () async {
+      final container = containerWith(signedIn(MemoryTokenStore(saved()), []), (r) {
+        expect(r.url.path, '/me');
+        expect(r.headers['Authorization'], 'Bearer token-1');
+        return http.Response(jsonEncode(celebrity), 200);
+      });
+
+      expect((await container.read(currentUserProvider.future))?.username, 'celebrity');
+    });
+
+    test('a sign-in the server rejects is dropped: logged out, tokens gone', () async {
+      final store = MemoryTokenStore(saved());
+      final calls = <String>[];
+      final container = containerWith(signedIn(store, calls), (_) => http.Response('{"error":"invalid token"}', 401));
+
+      expect(await container.read(currentUserProvider.future), isNull);
+      expect(store.tokens, isNull);
+      expect(calls, contains('/r')); // and the refresh token revoked
+    });
   });
 }

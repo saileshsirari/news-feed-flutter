@@ -1,5 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../data/services/api_service.dart';
 import '../data/services/service_providers.dart';
+import '../models/models.dart';
 import 'user_session.dart';
 
 /// Who's logged in: loading while the saved session is read at startup,
@@ -13,7 +15,8 @@ import 'user_session.dart';
 ///       private val _user = MutableStateFlow<UiState<User?>>(UiState.Loading)
 ///       val user: StateFlow<UiState<User?>> = _user
 ///       init { viewModelScope.launch { _user.value = UiState.Success(session.current()) } }
-///       fun login(name: String) { ... }
+///       fun signIn() { ... }               // Zitadel
+///       fun login(name: String) { ... }    // a test account
 ///       fun logout() { ... }
 ///     }
 ///
@@ -28,24 +31,58 @@ class CurrentUserNotifier extends AsyncNotifier<CurrentUser?> {
   // "rebuild me if that dependency changes" (≈ combine()/flatMapLatest on an
   // upstream Flow). Methods below use `ref.read`: one-off actions, like
   // calling an injected repository from a ViewModel method.
+  //
+  // Two ways to be logged in: signed in with Zitadel (tokens saved; the
+  // server says who we are via GET /me), or a test account picked by name
+  // (just an id saved, trusted by the server only under development login).
   @override
-  Future<CurrentUser?> build() => ref.watch(userSessionProvider).current();
+  Future<CurrentUser?> build() async {
+    final auth = ref.watch(authSessionProvider);
+    if (auth != null && await auth.isSignedIn) {
+      try {
+        return _fromUser(await ref.watch(apiServiceProvider).getMe());
+      } on ApiException catch (e) {
+        if (e.statusCode != 401) rethrow;
+        // The sign-in was revoked or expired for good: start over.
+        await auth.signOut();
+        return null;
+      }
+    }
+    return ref.watch(userSessionProvider).current();
+  }
 
-  /// Throws if the username doesn't exist; the login screen shows the error.
-  /// Only a successful login touches `state`, so a failed attempt never
-  /// flips the app out of the logged-out state.
+  /// Signs in through Zitadel's page (the system browser). Throws if the
+  /// user backs out or the server won't accept the sign-in; the login
+  /// screen shows the error and nothing changes.
+  Future<void> signIn() async {
+    final auth = ref.read(authSessionProvider);
+    if (auth == null) throw StateError('sign-in isn\'t configured');
+    await auth.signIn();
+    try {
+      state = AsyncData(_fromUser(await ref.read(apiServiceProvider).getMe()));
+    } on Object {
+      await auth.signOut(); // Don't keep tokens for a sign-in that didn't work.
+      rethrow;
+    }
+  }
+
+  /// A test account, by username. Throws if the username doesn't exist; the
+  /// login screen shows the error. Only a successful login touches `state`,
+  /// so a failed attempt never flips the app out of the logged-out state.
   Future<void> login(String username) async {
     final user = await ref.read(apiServiceProvider).getUserByUsername(username);
     await ref.read(userSessionProvider).save(user);
-    state = AsyncData(
-      CurrentUser(id: user.id, username: user.username, followerCount: user.followerCount),
-    );
+    state = AsyncData(_fromUser(user));
   }
 
   Future<void> logout() async {
+    await ref.read(authSessionProvider)?.signOut();
     await ref.read(userSessionProvider).clear();
     state = const AsyncData(null);
   }
+
+  static CurrentUser _fromUser(User user) =>
+      CurrentUser(id: user.id, username: user.username, followerCount: user.followerCount);
 }
 
 /// How screens use it:

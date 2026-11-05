@@ -1,10 +1,11 @@
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/models.dart';
 
-/// Mirrors news-feed-android's UserSession.kt. There's no real auth in
-/// news-feed-system — this is just "which seeded user am I acting as,"
-/// persisted so you don't have to re-type it after every app restart. Not a
-/// pattern to carry into anything real. SharedPreferences' Dart API is async
+/// Mirrors news-feed-android's UserSession.kt: which test account (seeded
+/// user) you're acting as, persisted so you don't have to re-type it after
+/// every app restart. Only for development login: a real sign-in keeps its
+/// tokens in secure storage instead (oidc_auth's SecureTokenStore), and the
+/// server, not this file, says who that is. SharedPreferences' Dart API is async
 /// (unlike Android's synchronous SharedPreferences), so unlike the Kotlin
 /// version, current() here is a Future.
 class CurrentUser {
@@ -35,8 +36,11 @@ class UserSession {
     await prefs.setInt(_keyFollowerCount, user.followerCount);
   }
 
+  /// Only this session's keys: other settings (like video quality) stay.
   Future<void> clear() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.clear();
+    for (final key in [_keyId, _keyUsername, _keyFollowerCount]) {
+      await prefs.remove(key);
+    }
   }
 }

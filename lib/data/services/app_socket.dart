@@ -36,7 +36,16 @@ class AppSocket {
   int _attempt = 0;
   Timer? _retryTimer;
 
-  AppSocket(this.userId, this._config);
+  /// [accessToken] gives the signed-in user's token (asked again on every
+  /// reconnect, so it's always a fresh one); without it, or when it gives
+  /// null, the socket connects as a test account, by user id only.
+  AppSocket(this.userId, this._config, {this.accessToken});
+
+  final Future<String?> Function()? accessToken;
+
+  /// What the server answers to; [tokenProtocolPrefix] carries the token.
+  static const protocol = 'newsfeed';
+  static const tokenProtocolPrefix = 'bearer.';
 
   Stream<Map<String, dynamic>> get events => _controller.stream;
 
@@ -48,10 +57,21 @@ class AppSocket {
 
   void connect() {
     if (_closed) return;
+    _connectWithToken().catchError((Object _) => _scheduleReconnect());
+  }
+
+  Future<void> _connectWithToken() async {
+    final token = await accessToken?.call();
+    if (_closed) return;
+    // A browser's WebSocket can't set an Authorization header, so the token
+    // rides in the subprotocol list instead (the server picks "newsfeed"
+    // and never echoes the token back). Same on every platform, for one
+    // code path.
+    final protocols = token == null ? null : [protocol, '$tokenProtocolPrefix$token'];
     // Same host as the REST API, from the one AppConfig — the whole reason
     // "can't log in on a real phone" happened was the address living in two
     // places and only one getting updated.
-    final channel = WebSocketChannel.connect(_config.webSocketUri(userId: userId));
+    final channel = WebSocketChannel.connect(_config.webSocketUri(userId: userId), protocols: protocols);
     _channel = channel;
     channel.ready.then(
       (_) {

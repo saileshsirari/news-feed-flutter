@@ -40,6 +40,9 @@ dependencies:
   shared_media:
     path: packages/shared_media
   web_socket_channel: ^3.0.1
+  # Zitadel sign-in (OIDC + PKCE), shared with any future split-out chat app.
+  oidc_auth:
+    path: packages/oidc_auth
   shared_preferences: ^2.3.3
   # All app state: services, current user, socket, and every screen's
   # notifier (see lib/session/current_user_provider.dart to start).
@@ -50,6 +53,8 @@ dependencies:
 dev_dependencies:
   flutter_test:
     sdk: flutter
+  # Only for its in-memory test mode (see test/flutter_test_config.dart).
+  flutter_secure_storage: ^11.2.0
 
   # The "flutter_lints" package below contains a set of recommended lints to
   # encourage good coding practices. The lint set provided by the package is
