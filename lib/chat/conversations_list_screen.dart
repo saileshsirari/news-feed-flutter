@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
 import '../models/models.dart';
 import 'contacts_screen.dart';
 import '../presence/presence_widgets.dart';
 import 'conversations_notifier.dart';
 import 'conversation_screen.dart';
+import 'search/message_search_screen.dart';
 
 /// The "Chat" tab itself — your existing conversations, most recent first.
 /// Starting something new (a 1:1 or a group) happens on a separate screen
@@ -28,6 +30,11 @@ class ConversationsListScreen extends ConsumerWidget {
         title: const Text('Chat'),
         actions: [
           IconButton(
+            icon: const Icon(Icons.search),
+            tooltip: 'Search messages',
+            onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const MessageSearchScreen())),
+          ),
+          IconButton(
             icon: const Icon(Icons.edit_outlined),
             tooltip: 'New chat',
             onPressed: () async {
@@ -36,9 +43,7 @@ class ConversationsListScreen extends ConsumerWidget {
               // someone (or finish a group) — replacing this route means a
               // single "back" from there returns straight here, instead of
               // through an empty picker screen in between.
-              await Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const ContactsScreen()),
-              );
+              await Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ContactsScreen()));
               notifier.load();
             },
           ),
@@ -51,7 +56,9 @@ class ConversationsListScreen extends ConsumerWidget {
             return const Center(child: CircularProgressIndicator());
           }
           if (vm.error != null) {
-            return Center(child: Text(vm.error!, style: TextStyle(color: Theme.of(context).colorScheme.error)));
+            return Center(
+              child: Text(vm.error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
+            );
           }
           if (vm.conversations.isEmpty) {
             return const Center(child: Text('No chats yet — tap the pencil to start one.'));
@@ -90,12 +97,10 @@ class _ConversationRow extends ConsumerWidget {
             )
           : null,
       onTap: () async {
-        // Await the push and reload on return: the push events this list
-        // listens for (see ConversationsNotifier) exclude whoever caused
-        // them, so sending a message or marking this conversation read
-        // yourself never arrives as a push here — only popping back and
-        // re-fetching picks up your own last message / cleared unread count.
-        // Grab the notifier before the await, like the old code grabbed vm.
+        // Await the push and reload on return, so your own last message and
+        // the cleared unread count show at once (the socket events that also
+        // bring them can lag a moment). Grab the notifier before the await,
+        // like the old code grabbed vm.
         final notifier = ref.read(conversationsProvider.notifier);
         await Navigator.of(context).push(
           MaterialPageRoute(
