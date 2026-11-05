@@ -10,6 +10,7 @@ import 'package:news_feed_flutter/data/services/api_service.dart';
 import 'package:news_feed_flutter/data/services/service_providers.dart';
 import 'package:news_feed_flutter/data/services/socket_provider.dart';
 import 'package:news_feed_flutter/main.dart';
+import 'package:news_feed_flutter/session/device_registration.dart';
 import 'package:oidc_auth/oidc_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -135,12 +136,17 @@ void main() {
           redirectUri.replace(queryParameters: {'code': 'c', 'state': url.queryParameters['state']!}),
     );
     final apiAuthorization = <String?>[];
+    final deviceRegistrations = <String>[];
     final api = ApiService(
       AppConfig(apiBaseUrl: Uri.parse('https://example.test')),
       httpClient: AuthorizedClient(
         auth.accessToken,
-        MockClient((request) {
+        MockClient((request) async {
           apiAuthorization.add(request.headers['Authorization']);
+          if (request.method == 'PUT' && request.url.path.startsWith('/devices/')) {
+            deviceRegistrations.add('${request.url.pathSegments.last} ${request.body}');
+            return http.Response('{}', 201);
+          }
           return fakeServer(request);
         }),
       ),
@@ -152,6 +158,7 @@ void main() {
           authSessionProvider.overrideWithValue(auth),
           apiServiceProvider.overrideWithValue(api),
           socketProvider.overrideWith((ref, userId) => socket),
+          deviceDescriptionProvider.overrideWithValue(() async => (name: 'Test phone', platform: 'android')),
         ],
         child: const NewsFeedApp(),
       ),
@@ -165,6 +172,11 @@ void main() {
     expect(find.text('@user_0 · 12 followers'), findsOneWidget);
     expect(apiAuthorization, isNotEmpty);
     expect(apiAuthorization.toSet(), {'Bearer token-1'});
+    // This install registered itself, once, with a stable random id (in the
+    // background, so give it a moment).
+    await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 50)));
+    expect(deviceRegistrations, hasLength(1));
+    expect(deviceRegistrations.single, matches(RegExp(r'^[a-z0-9]{32} \{"name":"Test phone","platform":"android"\}$')));
 
     await tester.tap(find.byIcon(Icons.more_vert));
     await tester.pumpAndSettle();

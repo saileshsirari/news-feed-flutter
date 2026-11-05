@@ -44,6 +44,8 @@ dependencies:
   oidc_auth:
     path: packages/oidc_auth
   shared_preferences: ^2.3.3
+  # A device's name for the device list ("Pixel 8", "Chrome on macOS").
+  device_info_plus: ^13.2.0
   # All app state: services, current user, socket, and every screen's
   # notifier (see lib/session/current_user_provider.dart to start).
   flutter_riverpod: ^3.4.3

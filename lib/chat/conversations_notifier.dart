@@ -38,10 +38,10 @@ class ConversationsState {
 /// just reload on too rather than special-case). All three carry only ids,
 /// same "don't trust the payload shape, go re-fetch" pattern as
 /// ConversationNotifier — a full reload is simplest and correct at this
-/// scale. Note the fanout excludes whoever *caused* the event (see
-/// publishToOtherParticipants), so your own sent messages and your own
-/// read-marking never arrive here as a push — conversations_list_screen.dart
-/// covers that by reloading when you pop back from a conversation instead.
+/// scale. Events reach every participant, including whoever caused them,
+/// so your own sends and read-marking from another device (your phone while
+/// you're in the browser) update this list too; conversations_list_screen.dart
+/// also reloads when you pop back from a conversation.
 ///
 /// Compose/Android: ≈ `@HiltViewModel class ConversationsViewModel` with a
 /// `StateFlow<ConversationsUiState>` and a public `load()`. No family here:

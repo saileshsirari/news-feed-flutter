@@ -38,6 +38,16 @@ class ApiService {
   /// Who the access token belongs to (created on first sign-in).
   Future<User> getMe() async => User.fromJson(_decodeObject(await _http.get(_uri('/me'))));
 
+  /// Registers this install (or refreshes it) for the signed-in user.
+  Future<void> registerDevice(String installId, {required String name, required String platform}) async {
+    final res = await _http.put(
+      _uri('/devices/$installId'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'name': name, 'platform': platform}),
+    );
+    if (res.statusCode >= 400) throw ApiException(res.statusCode, res.body);
+  }
+
   Future<User> getUserByUsername(String username) async {
     final res = await _http.get(_uri('/users', {'username': username}));
     return User.fromJson(_decodeObject(res));

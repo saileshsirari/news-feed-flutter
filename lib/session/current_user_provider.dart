@@ -1,7 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../data/services/api_service.dart';
 import '../data/services/service_providers.dart';
 import '../models/models.dart';
+import 'device_registration.dart';
 import 'user_session.dart';
 
 /// Who's logged in: loading while the saved session is read at startup,
@@ -40,7 +43,9 @@ class CurrentUserNotifier extends AsyncNotifier<CurrentUser?> {
     final auth = ref.watch(authSessionProvider);
     if (auth != null && await auth.isSignedIn) {
       try {
-        return _fromUser(await ref.watch(apiServiceProvider).getMe());
+        final me = _fromUser(await ref.watch(apiServiceProvider).getMe());
+        unawaited(ref.read(deviceRegistrarProvider)()); // refreshes "last seen"
+        return me;
       } on ApiException catch (e) {
         if (e.statusCode != 401) rethrow;
         // The sign-in was revoked or expired for good: start over.
@@ -60,6 +65,7 @@ class CurrentUserNotifier extends AsyncNotifier<CurrentUser?> {
     await auth.signIn();
     try {
       state = AsyncData(_fromUser(await ref.read(apiServiceProvider).getMe()));
+      unawaited(ref.read(deviceRegistrarProvider)());
     } on Object {
       await auth.signOut(); // Don't keep tokens for a sign-in that didn't work.
       rethrow;
