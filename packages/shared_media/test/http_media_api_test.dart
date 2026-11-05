@@ -77,4 +77,14 @@ void main() {
           .having((e) => e.message, 'message', 'contentType must be one of ...')),
     );
   });
+
+  test('a 429 becomes a clear "too many uploads" message', () async {
+    final api = apiReplying(429, {'error': 'too many requests', 'action': 'upload', 'retryAfterSeconds': 120});
+    await expectLater(
+      api.requestUpload(PickedMedia(bytes: Uint8List(1), contentType: 'image/jpeg')),
+      throwsA(isA<MediaApiException>()
+          .having((e) => e.statusCode, 'statusCode', 429)
+          .having((e) => e.message, 'message', 'Too many uploads for now. Try again in 120 s.')),
+    );
+  });
 }

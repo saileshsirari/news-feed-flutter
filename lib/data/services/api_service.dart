@@ -195,6 +195,28 @@ class ApiException implements Exception {
   final String body;
   ApiException(this.statusCode, this.body);
 
+  /// The server's rate limit said "slow down" (HTTP 429).
+  bool get isRateLimited => statusCode == 429;
+
+  /// From a 429: how long until the server takes this again.
+  Duration? get retryAfter {
+    if (!isRateLimited) return null;
+    try {
+      final seconds = (jsonDecode(body) as Map<String, dynamic>)['retryAfterSeconds'] as int?;
+      return seconds == null ? null : Duration(seconds: seconds);
+    } on Object {
+      return null;
+    }
+  }
+
   @override
-  String toString() => 'ApiException($statusCode): $body';
+  String toString() {
+    if (isRateLimited) return tooFastMessage(retryAfter);
+    return 'ApiException($statusCode): $body';
+  }
 }
+
+/// What to tell someone who hit a rate limit.
+String tooFastMessage(Duration? retryAfter) => retryAfter == null
+    ? 'You\'re doing that too fast. Try again in a moment.'
+    : 'You\'re doing that too fast. Try again in ${retryAfter.inSeconds} s.';

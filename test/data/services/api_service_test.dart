@@ -72,4 +72,13 @@ void main() {
       expect(local.webSocketUri(userId: 5).toString(), 'ws://10.0.2.2:3000/ws?userId=5');
     });
   });
+
+  test('a 429 says to slow down, with how long to wait', () {
+    final limited = ApiException(429, '{"error":"too many requests","action":"message","retryAfterSeconds":3}');
+    expect(limited.isRateLimited, isTrue);
+    expect(limited.retryAfter, const Duration(seconds: 3));
+    expect('$limited', 'You\'re doing that too fast. Try again in 3 s.');
+    expect('${ApiException(429, 'not json')}', 'You\'re doing that too fast. Try again in a moment.');
+    expect(ApiException(500, 'boom').isRateLimited, isFalse);
+  });
 }

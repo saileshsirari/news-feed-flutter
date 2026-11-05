@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show KeepAliveLink;
 import 'package:shared_media/shared_media.dart';
+import '../data/services/api_service.dart';
 import '../data/services/service_providers.dart';
 import '../models/models.dart';
 import '../session/current_user_provider.dart';
@@ -161,9 +162,11 @@ class ChatOutboxNotifier extends Notifier<ChatOutboxState> {
       if (!ref.mounted) return;
       _remove(clientMessageId);
       state = state.copyWith(sent: [...state.sent, sent]);
-    } catch (_) {
+    } catch (e) {
       if (!ref.mounted || _find(clientMessageId) == null) return;
-      _replace(message.copyWith(status: PendingStatus.failed, error: 'Couldn\'t send'));
+      // Too fast: say so, so it's clear a retry later will work.
+      final reason = e is ApiException && e.isRateLimited ? tooFastMessage(e.retryAfter) : 'Couldn\'t send';
+      _replace(message.copyWith(status: PendingStatus.failed, error: reason));
     }
   }
 

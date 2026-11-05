@@ -102,8 +102,22 @@ class HttpMediaApi implements MediaApi {
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode(body),
     );
+    if (res.statusCode == 429) {
+      // From the body, not the Retry-After header: a browser hides that
+      // header from cross-origin code.
+      final wait = _field(res.body, 'retryAfterSeconds');
+      throw MediaApiException(429, 'Too many uploads for now. Try again${wait == null ? ' later' : ' in $wait s'}.');
+    }
     if (res.statusCode >= 400) throw MediaApiException(res.statusCode, _errorMessage(res.body));
     return jsonDecode(res.body) as Map<String, dynamic>;
+  }
+
+  static Object? _field(String body, String name) {
+    try {
+      return (jsonDecode(body) as Map<String, dynamic>)[name];
+    } on Object {
+      return null;
+    }
   }
 
   static String _errorMessage(String body) {
