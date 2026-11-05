@@ -20,6 +20,7 @@ export 'src/providers.dart'
 export 'src/widgets/composer_attachments.dart' show AddMediaButton, ComposerAttachments, PendingMediaGrid;
 export 'src/widgets/media_grid.dart' show MediaGrid;
 export 'src/widgets/media_image.dart' show MediaImage;
+export 'src/widgets/media_viewer_screen.dart' show MediaViewerScreen;
 export 'src/widgets/video_player_screen.dart' show VideoPlayerScreen;
 export 'src/widgets/video_quality_sheet.dart' show VideoQualitySettingTile, showVideoQualitySheet;
 export 'src/formatting.dart' show formatVideoDuration;

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../models/media_attachment.dart';
 import 'media_image.dart';
+import 'media_viewer_screen.dart';
 import 'video_player_screen.dart';
 import 'video_tile.dart';
 
@@ -9,16 +10,26 @@ import 'video_tile.dart';
 /// one file at its own shape, two side by side, three as one large and two
 /// small, four or more as a 2×2 grid with "+N" on the last tile.
 class MediaGrid extends StatelessWidget {
-  const MediaGrid({super.key, required this.media, this.onTap, this.tileBuilder = defaultTile});
+  const MediaGrid({
+    super.key,
+    required this.media,
+    this.onTap,
+    this.tileBuilder = defaultTile,
+    this.viewerImageBuilder = MediaViewerScreen.defaultImage,
+  });
 
   final List<MediaAttachment> media;
 
   /// Called with the tapped file's index in [media]. Left null, tapping a
-  /// video plays it full screen and tapping an image does nothing.
+  /// video plays it full screen, and tapping a photo (or the "+N" tile)
+  /// opens all the files full screen at that one.
   final ValueChanged<int>? onTap;
 
   /// How one file is drawn; tests swap it to avoid network images.
   final Widget Function(MediaAttachment media) tileBuilder;
+
+  /// How the full-screen viewer draws a photo; tests swap it too.
+  final Widget Function(MediaAttachment media) viewerImageBuilder;
 
   static const _gap = 2.0;
   static const _maxTiles = 4;
@@ -61,15 +72,19 @@ class MediaGrid extends StatelessWidget {
     }
   }
 
-  VoidCallback? _onTapFor(BuildContext context, int index) {
+  VoidCallback _onTapFor(BuildContext context, int index, {required bool coversHidden}) {
     if (onTap != null) return () => onTap!(index);
-    if (media[index].kind == MediaKind.video) return () => VideoPlayerScreen.open(context, media[index]);
-    return null;
+    // A video plays straight away; the "+N" tile (even over a video) opens
+    // the viewer, which is where the hidden files are.
+    if (media[index].kind == MediaKind.video && !coversHidden) {
+      return () => VideoPlayerScreen.open(context, media[index]);
+    }
+    return () => MediaViewerScreen.open(context, media, initialIndex: index, imageBuilder: viewerImageBuilder);
   }
 
   Widget _tile(BuildContext context, int index, {int hiddenCount = 0}) {
     return GestureDetector(
-      onTap: _onTapFor(context, index),
+      onTap: _onTapFor(context, index, coversHidden: hiddenCount > 0),
       child: Stack(
         fit: StackFit.expand,
         children: [

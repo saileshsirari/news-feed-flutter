@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_media/shared_media.dart';
 
@@ -23,6 +24,7 @@ void main() {
               media: media,
               onTap: onTap,
               tileBuilder: (m) => ColoredBox(color: Colors.grey, child: Text('tile ${m.id}')),
+              viewerImageBuilder: (m) => Text('full ${m.id}'),
             ),
           ),
         ),
@@ -81,6 +83,75 @@ void main() {
     await tester.pumpWidget(MaterialApp(home: MediaGrid(media: [video])));
     expect(find.byIcon(Icons.play_arrow_rounded), findsOneWidget);
     expect(find.text('1:15'), findsOneWidget);
+  });
+
+  group('full-screen viewer', () {
+    testWidgets('tapping a photo opens it full screen, and × closes it', (tester) async {
+      await pumpGrid(tester, [attachment(1), attachment(2)]);
+      await tester.tap(find.text('tile 2'));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(MediaViewerScreen), findsOneWidget);
+      expect(find.text('full 2'), findsOneWidget);
+      expect(find.text('2 / 2'), findsOneWidget);
+
+      await tester.tap(find.byIcon(Icons.close));
+      await tester.pumpAndSettle();
+      expect(find.byType(MediaViewerScreen), findsNothing);
+    });
+
+    testWidgets('swipes to the next file, and Esc closes', (tester) async {
+      await pumpGrid(tester, [attachment(1), attachment(2), attachment(3)]);
+      await tester.tap(find.text('tile 1'));
+      await tester.pumpAndSettle();
+
+      await tester.fling(find.text('full 1'), const Offset(-400, 0), 1000);
+      await tester.pumpAndSettle();
+      expect(find.text('full 2'), findsOneWidget);
+      expect(find.text('2 / 3'), findsOneWidget);
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await tester.pumpAndSettle();
+      expect(find.byType(MediaViewerScreen), findsNothing);
+    });
+
+    testWidgets('the arrow keys move between files', (tester) async {
+      await pumpGrid(tester, [attachment(1), attachment(2)]);
+      await tester.tap(find.text('tile 1'));
+      await tester.pumpAndSettle();
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+      await tester.pumpAndSettle();
+      expect(find.text('2 / 2'), findsOneWidget);
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
+      await tester.pumpAndSettle();
+      expect(find.text('1 / 2'), findsOneWidget);
+    });
+
+    testWidgets('double-tap zooms a photo, and swiping then pans instead of turning the page', (tester) async {
+      await pumpGrid(tester, [attachment(1), attachment(2)]);
+      await tester.tap(find.text('tile 1'));
+      await tester.pumpAndSettle();
+
+      final photo = find.text('full 1');
+      await tester.tap(photo);
+      await tester.pump(const Duration(milliseconds: 50));
+      await tester.tap(photo);
+      await tester.pumpAndSettle();
+      final zoom = tester.widget<InteractiveViewer>(find.byType(InteractiveViewer).first);
+      expect(zoom.transformationController!.value.getMaxScaleOnAxis(), greaterThan(2));
+
+      await tester.fling(photo, const Offset(-400, 0), 1000);
+      await tester.pumpAndSettle();
+      expect(find.text('1 / 2'), findsOneWidget);
+    });
+
+    testWidgets('the +N tile opens the viewer there, to see the hidden files', (tester) async {
+      await pumpGrid(tester, [for (var i = 1; i <= 6; i++) attachment(i)]);
+      await tester.tap(find.text('+2'));
+      await tester.pumpAndSettle();
+      expect(find.text('4 / 6'), findsOneWidget);
+    });
   });
 
   test('formats video lengths as m:ss', () {
