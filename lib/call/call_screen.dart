@@ -22,6 +22,14 @@ class CallScreen extends ConsumerWidget {
     final notifier = ref.read(callProvider(conversationId).notifier);
     final room = vm.room;
 
+    // Everyone else hung up (or nobody answered): say so, then close.
+    ref.listen(callProvider(conversationId).select((s) => s.endedReason), (_, reason) {
+      if (reason == null) return;
+      Future<void>.delayed(const Duration(milliseconds: 1500), () {
+        if (context.mounted) Navigator.of(context).maybePop();
+      });
+    });
+
     return Scaffold(
       backgroundColor: Colors.black,
       appBar: AppBar(
@@ -37,7 +45,15 @@ class CallScreen extends ConsumerWidget {
         ],
       ),
       body: SafeArea(
-        child: vm.error != null
+        child: vm.endedReason != null
+            ? Center(
+                child: Text(
+                  vm.endedReason!,
+                  key: const Key('call-ended'),
+                  style: const TextStyle(color: Colors.white, fontSize: 20),
+                ),
+              )
+            : vm.error != null
             ? Center(
                 child: Padding(
                   padding: const EdgeInsets.all(24),
@@ -48,7 +64,9 @@ class CallScreen extends ConsumerWidget {
                 ? const Center(child: CircularProgressIndicator())
                 : _ParticipantGrid(room: room),
       ),
-      bottomNavigationBar: room == null ? null : SafeArea(child: _CallControls(vm: vm, notifier: notifier)),
+      bottomNavigationBar: room == null || vm.endedReason != null
+          ? null
+          : SafeArea(child: _CallControls(vm: vm, notifier: notifier)),
     );
   }
 }

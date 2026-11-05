@@ -3,6 +3,7 @@ import 'package:livekit_client/livekit_client.dart';
 import 'package:permission_handler/permission_handler.dart';
 import '../data/services/service_providers.dart';
 import '../session/current_user_provider.dart';
+import 'call_end_rule.dart';
 
 /// What CallScreen draws.
 ///
@@ -23,6 +24,7 @@ class CallState {
     this.roomRevision = 0,
     this.isConnecting = true,
     this.error,
+    this.endedReason,
     this.isTogglingRecording = false,
     this.optimisticIsRecording,
   });
@@ -31,6 +33,10 @@ class CallState {
   final int roomRevision;
   final bool isConnecting;
   final String? error;
+
+  /// Set once the call is over ("Call ended", "No answer"): the screen says
+  /// so briefly and closes.
+  final String? endedReason;
   final bool isTogglingRecording;
 
   // Masks room.isRecording right after our own toggle succeeds. LiveKit's
@@ -58,6 +64,7 @@ class CallState {
     int? roomRevision,
     bool? isConnecting,
     Object? error = _keep,
+    String? endedReason,
     bool? isTogglingRecording,
     Object? optimisticIsRecording = _keep,
   }) {
@@ -66,6 +73,7 @@ class CallState {
       roomRevision: roomRevision ?? this.roomRevision,
       isConnecting: isConnecting ?? this.isConnecting,
       error: identical(error, _keep) ? this.error : error as String?,
+      endedReason: endedReason ?? this.endedReason,
       isTogglingRecording: isTogglingRecording ?? this.isTogglingRecording,
       optimisticIsRecording:
           identical(optimisticIsRecording, _keep) ? this.optimisticIsRecording : optimisticIsRecording as bool?,
@@ -90,6 +98,10 @@ class CallNotifier extends Notifier<CallState> {
   // without reading state from a notifier that's being torn down.
   Room? _room;
 
+  /// Ends the call when everyone else has left, or nobody answers.
+  late final CallEndRule _endRule = CallEndRule(onEnd: _end);
+  bool _leaving = false;
+
   @override
   CallState build() {
     // ref.read, not watch: see ConversationNotifier.build.
@@ -97,6 +109,7 @@ class CallNotifier extends Notifier<CallState> {
     // ≈ onCleared(): disposes whichever Room ended up connected (none if we
     // were still connecting — _connect cleans that case up itself).
     ref.onDispose(() {
+      _endRule.dispose();
       _room?.removeListener(_onRoomChanged);
       // Fire-and-forget: onDispose can't be awaited, and the room is going
       // away regardless of whether this finishes before the screen unmounts.
@@ -128,10 +141,16 @@ class CallNotifier extends Notifier<CallState> {
       newRoom = Room(roomOptions: const RoomOptions(adaptiveStream: true, dynacast: true));
       newRoom.addListener(_onRoomChanged);
       // The real signal, once it does arrive, always wins over our guess.
-      newRoom.events.listen((event) {
+      final room = newRoom;
+      room.events.listen((event) {
         if (event is RoomRecordingStatusChanged && ref.mounted) {
           state = state.copyWith(optimisticIsRecording: null);
         }
+        // Who's here changed: maybe everyone else has gone.
+        if (event is ParticipantConnectedEvent || event is ParticipantDisconnectedEvent) {
+          _endRule.othersChanged(room.remoteParticipants.length);
+        }
+        if (event is RoomDisconnectedEvent && !_leaving) _endRule.disconnected();
       });
       await newRoom.connect(callToken.url, callToken.token);
       await newRoom.localParticipant?.setMicrophoneEnabled(true);
@@ -146,6 +165,7 @@ class CallNotifier extends Notifier<CallState> {
       }
       _room = newRoom;
       state = state.copyWith(room: newRoom, isConnecting: false);
+      _endRule.start(newRoom.remoteParticipants.length);
     } catch (e) {
       if (!ref.mounted) {
         await newRoom?.dispose();
@@ -193,7 +213,17 @@ class CallNotifier extends Notifier<CallState> {
   }
 
   Future<void> leave() async {
+    _leaving = true;
+    _endRule.dispose();
     await state.room?.disconnect();
+  }
+
+  /// The call ended by itself: leave the room and tell the screen why.
+  Future<void> _end(String reason) async {
+    if (!ref.mounted) return;
+    _leaving = true;
+    state = state.copyWith(endedReason: reason);
+    await _room?.disconnect();
   }
 }
 
