@@ -50,6 +50,11 @@ class CallState {
   final bool? optimisticIsRecording;
 
   bool get isMicEnabled => room?.localParticipant?.isMicrophoneEnabled() ?? false;
+
+  /// False when the browser blocked sound until the user clicks (Chrome's
+  /// autoplay rule): video plays but nothing is heard. The screen then
+  /// offers "Tap to turn on sound" (see CallNotifier.startAudio).
+  bool get canPlayAudio => room?.canPlaybackAudio ?? true;
   bool get isCameraEnabled => room?.localParticipant?.isCameraEnabled() ?? false;
   // The optimistic guess wins until the real room.isRecording push (see
   // RoomRecordingStatusChanged in CallNotifier) confirms it — so someone
@@ -151,6 +156,8 @@ class CallNotifier extends Notifier<CallState> {
           _endRule.othersChanged(room.remoteParticipants.length);
         }
         if (event is RoomDisconnectedEvent && !_leaving) _endRule.disconnected();
+        // The browser allowed or blocked sound: redraw (canPlayAudio).
+        if (event is AudioPlaybackStatusChanged) _onRoomChanged();
       });
       await newRoom.connect(callToken.url, callToken.token);
       await newRoom.localParticipant?.setMicrophoneEnabled(true);
@@ -164,6 +171,10 @@ class CallNotifier extends Notifier<CallState> {
         return;
       }
       _room = newRoom;
+      // Start the other people's sound now. On the web this may still be
+      // blocked (no recent click); then canPlayAudio goes false and the
+      // screen asks for a tap. Elsewhere it's a no-op.
+      await newRoom.startAudio();
       state = state.copyWith(room: newRoom, isConnecting: false);
       _endRule.start(newRoom.remoteParticipants.length);
     } catch (e) {
@@ -210,6 +221,12 @@ class CallNotifier extends Notifier<CallState> {
     final participant = state.room?.localParticipant;
     if (participant == null) return;
     await participant.setCameraEnabled(!state.isCameraEnabled);
+  }
+
+  /// After the user tapped "Turn on sound": a click lets the browser play it.
+  Future<void> startAudio() async {
+    await _room?.startAudio();
+    _onRoomChanged();
   }
 
   Future<void> leave() async {

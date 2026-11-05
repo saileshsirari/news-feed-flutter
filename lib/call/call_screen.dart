@@ -62,7 +62,25 @@ class CallScreen extends ConsumerWidget {
               )
             : vm.isConnecting || room == null
                 ? const Center(child: CircularProgressIndicator())
-                : _ParticipantGrid(room: room),
+                : Stack(
+                    children: [
+                      _ParticipantGrid(room: room),
+                      // The browser blocked sound until a click: ask for one.
+                      if (!vm.canPlayAudio)
+                        Align(
+                          alignment: Alignment.topCenter,
+                          child: Padding(
+                            padding: const EdgeInsets.all(12),
+                            child: FilledButton.icon(
+                              key: const Key('turn-on-sound'),
+                              onPressed: notifier.startAudio,
+                              icon: const Icon(Icons.volume_up),
+                              label: const Text('Tap to turn on sound'),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
       ),
       bottomNavigationBar: room == null || vm.endedReason != null
           ? null
