@@ -49,11 +49,16 @@ dependencies:
   shared_preferences: ^2.3.3
   # A device's name for the device list ("Pixel 8", "Chrome on macOS").
   device_info_plus: ^13.2.0
+  # Browser APIs (Web Push), on the web only.
+  web: ^1.1.1
   # All app state: services, current user, socket, and every screen's
   # notifier (see lib/session/current_user_provider.dart to start).
   flutter_riverpod: ^3.4.3
   livekit_client: ^2.13.0
   permission_handler: ^13.0.2
+  firebase_core: ^5.1.0
+  firebase_messaging: ^17.0.1
+  flutter_local_notifications: ^23.0.0
 
 dev_dependencies:
   flutter_test:

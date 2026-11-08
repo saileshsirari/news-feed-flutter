@@ -38,13 +38,37 @@ class ApiService {
   /// Who the access token belongs to (created on first sign-in).
   Future<User> getMe() async => User.fromJson(_decodeObject(await _http.get(_uri('/me'))));
 
-  /// Registers this install (or refreshes it) for the signed-in user.
-  Future<void> registerDevice(String installId, {required String name, required String platform}) async {
+  /// Registers this install (or refreshes it) for the signed-in user;
+  /// returns its id on the server (push addresses are stored against it).
+  Future<int> registerDevice(String installId, {required String name, required String platform}) async {
     final res = await _http.put(
       _uri('/devices/$installId'),
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode({'name': name, 'platform': platform}),
     );
+    return _decodeObject(res)['id'] as int;
+  }
+
+  /// The server's public key for Web Push; null if it has none set up.
+  Future<String?> getWebPushKey() async {
+    final res = await _http.get(_uri('/push/web-key'));
+    if (res.statusCode == 503) return null;
+    return _decodeObject(res)['publicKey'] as String;
+  }
+
+  /// Where this device is reached for push: {kind: "webpush", subscription}
+  /// or {kind: "fcm", token}.
+  Future<void> registerPushEndpoint(int deviceId, Map<String, dynamic> address) async {
+    final res = await _http.put(
+      _uri('/push/endpoints/$deviceId'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode(address),
+    );
+    if (res.statusCode >= 400) throw ApiException(res.statusCode, res.body);
+  }
+
+  Future<void> deletePushEndpoint(int deviceId) async {
+    final res = await _http.delete(_uri('/push/endpoints/$deviceId'));
     if (res.statusCode >= 400) throw ApiException(res.statusCode, res.body);
   }
 
@@ -137,16 +161,18 @@ class ApiService {
 
   /// Sync: the messages after [afterSeq] (oldest first), or before
   /// [beforeSeq] (newest first), as the server sent them.
+  /// [userId] can be null with a signed-in token (the server knows who it
+  /// is), as in a push notification's background handler.
   Future<({List<Map<String, dynamic>> messages, bool hasMore})> getMessagesBySeq(
     int conversationId,
-    int userId, {
+    int? userId, {
     int? afterSeq,
     int? beforeSeq,
     required int limit,
   }) async {
     final res = await _http.get(
       _uri('/conversations/$conversationId/messages', {
-        'userId': userId,
+        'userId': ?userId,
         'limit': limit,
         'afterSeq': ?afterSeq,
         'beforeSeq': ?beforeSeq,

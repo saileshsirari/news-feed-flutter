@@ -1,5 +1,7 @@
 plugins {
     id("com.android.application")
+    // Firebase settings from google-services.json (push notifications).
+    id("com.google.gms.google-services")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
 }
@@ -13,6 +15,8 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
+        // flutter_local_notifications uses newer Java date APIs.
+        isCoreLibraryDesugaringEnabled = true
     }
 
     defaultConfig {
@@ -49,4 +53,9 @@ kotlin {
 
 flutter {
     source = "../.."
+}
+
+dependencies {
+    // Newer Java APIs on older Android versions (flutter_local_notifications).
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")
 }

@@ -150,7 +150,7 @@ void main() {
           apiAuthorization.add(request.headers['Authorization']);
           if (request.method == 'PUT' && request.url.path.startsWith('/devices/')) {
             deviceRegistrations.add('${request.url.pathSegments.last} ${request.body}');
-            return http.Response('{}', 201);
+            return http.Response('{"id": 77}', 201);
           }
           return fakeServer(request);
         }),

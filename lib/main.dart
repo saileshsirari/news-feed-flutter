@@ -1,12 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'data/services/media_providers.dart';
+import 'push/push_setup.dart';
 import 'data/services/service_providers.dart';
 import 'feed/login_screen.dart';
 import 'home/home_screen.dart';
 import 'session/current_user_provider.dart';
 
-void main() {
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  // Firebase for push on Android/iOS (no-op elsewhere, and if not set up).
+  await setUpPush();
   // ProviderScope holds every provider's value for the whole app (the
   // services, the current user, the socket). Providers themselves are just
   // global recipes; the state lives here.

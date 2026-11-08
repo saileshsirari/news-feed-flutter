@@ -45,7 +45,7 @@ class CurrentUserNotifier extends AsyncNotifier<CurrentUser?> {
     if (auth != null && await auth.isSignedIn) {
       try {
         final me = _fromUser(await ref.watch(apiServiceProvider).getMe());
-        unawaited(ref.read(deviceRegistrarProvider)()); // refreshes "last seen"
+        unawaited(ref.read(deviceRegistrarProvider)(me.id)); // refreshes "last seen"
         return me;
       } on ApiException catch (e) {
         if (e.statusCode != 401) rethrow;
@@ -65,8 +65,9 @@ class CurrentUserNotifier extends AsyncNotifier<CurrentUser?> {
     if (auth == null) throw StateError('sign-in isn\'t configured');
     await auth.signIn();
     try {
-      state = AsyncData(_fromUser(await ref.read(apiServiceProvider).getMe()));
-      unawaited(ref.read(deviceRegistrarProvider)());
+      final me = _fromUser(await ref.read(apiServiceProvider).getMe());
+      state = AsyncData(me);
+      unawaited(ref.read(deviceRegistrarProvider)(me.id));
     } on Object {
       await auth.signOut(); // Don't keep tokens for a sign-in that didn't work.
       rethrow;

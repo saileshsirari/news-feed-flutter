@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:shared_media/shared_media.dart';
+import 'notifications_setting_tile.dart';
 
 /// App settings. Each feature contributes its own rows; the media package's
 /// video quality is the first.
@@ -15,6 +16,8 @@ class SettingsScreen extends StatelessWidget {
       appBar: AppBar(title: const Text('Settings')),
       body: ListView(
         children: [
+          _SectionHeader('Notifications'),
+          const NotificationsSettingTile(),
           _SectionHeader('Uploads'),
           const VideoQualitySettingTile(),
         ],

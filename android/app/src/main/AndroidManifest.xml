@@ -1,5 +1,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.INTERNET"/>
+    <!-- Android 13+: asked when you turn notifications on (Settings). -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
     <!-- For LiveKit calls (see lib/call) — mic is required to join, camera is
          optional (CallViewModel starts audio-only, toggled on later). -->
     <uses-permission android:name="android.permission.RECORD_AUDIO"/>
