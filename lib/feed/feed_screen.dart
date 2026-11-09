@@ -5,6 +5,7 @@ import '../models/models.dart';
 import '../session/current_user_provider.dart';
 import '../settings/settings_screen.dart';
 import 'feed_notifier.dart';
+import 'comments_sheet.dart';
 
 enum _MenuAction { settings, logout }
 
@@ -157,6 +158,40 @@ class _PostRow extends StatelessWidget {
           ),
           if (post.body.isNotEmpty) Padding(padding: const EdgeInsets.only(top: 4), child: Text(post.body)),
           if (post.media.isNotEmpty) Padding(padding: const EdgeInsets.only(top: 8), child: MediaGrid(media: post.media)),
+          _PostActions(post),
+        ],
+      ),
+    );
+  }
+}
+
+/// ♡ like and 💬 comments, with their counts.
+class _PostActions extends ConsumerWidget {
+  const _PostActions(this.post);
+  final Post post;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final colors = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.only(top: 4),
+      child: Row(
+        children: [
+          TextButton.icon(
+            key: Key('like-${post.id}'),
+            onPressed: () => ref.read(feedProvider.notifier).toggleLike(post.id),
+            icon: Icon(
+              post.likedByMe ? Icons.favorite : Icons.favorite_border,
+              color: post.likedByMe ? Colors.red : colors.onSurfaceVariant,
+            ),
+            label: Text(post.likeCount > 0 ? '${post.likeCount}' : 'Like'),
+          ),
+          TextButton.icon(
+            key: Key('comments-${post.id}'),
+            onPressed: () => showComments(context, post),
+            icon: Icon(Icons.chat_bubble_outline, color: colors.onSurfaceVariant),
+            label: Text(post.commentCount > 0 ? '${post.commentCount}' : 'Comment'),
+          ),
         ],
       ),
     );

@@ -152,6 +152,45 @@ class FeedNotifier extends Notifier<FeedState> {
     }
   }
 
+  /// Likes or unlikes at once on screen, then confirms with the server (its
+  /// count wins, in case others liked meanwhile); puts it back if that fails.
+  Future<void> toggleLike(int postId) async {
+    final before = _post(postId);
+    if (before == null) return;
+    final liked = !before.likedByMe;
+    _replacePost(before.copyWith(likedByMe: liked, likeCount: (before.likeCount + (liked ? 1 : -1)).clamp(0, 1 << 30)));
+    try {
+      final count = await ref.read(apiServiceProvider).likePost(postId, userId: _userId, liked: liked);
+      if (!ref.mounted) return;
+      final now = _post(postId);
+      if (now != null) _replacePost(now.copyWith(likeCount: count));
+    } catch (e) {
+      if (!ref.mounted) return;
+      _replacePost(before);
+      state = state.copyWith(error: 'Couldn\'t ${liked ? 'like' : 'unlike'}: $e');
+    }
+  }
+
+  /// The comments sheet added or removed one: keep the count under the post right.
+  void setCommentCount(int postId, int count) {
+    final post = _post(postId);
+    if (post != null) _replacePost(post.copyWith(commentCount: count));
+  }
+
+  Post? _post(int postId) {
+    for (final p in state.posts) {
+      if (p.id == postId) return p;
+    }
+    return null;
+  }
+
+  void _replacePost(Post post) {
+    state = state.copyWith(posts: [for (final p in state.posts) p.id == post.id ? post : p]);
+    for (var i = 0; i < _unconfirmedOwnPosts.length; i++) {
+      if (_unconfirmedOwnPosts[i].id == post.id) _unconfirmedOwnPosts[i] = post;
+    }
+  }
+
   /// [mediaIds] are already uploaded (see shared_media's MediaDraftNotifier).
   /// A post needs text, media, or both.
   Future<void> publishPost(String body, {List<int> mediaIds = const []}) async {

@@ -39,6 +39,12 @@ class Post {
   /// Images and videos, in the order the author arranged them.
   final List<MediaAttachment> media;
 
+  final int likeCount;
+  final int commentCount;
+
+  /// Whether the signed-in user liked it.
+  final bool likedByMe;
+
   Post({
     required this.id,
     required this.authorId,
@@ -46,6 +52,9 @@ class Post {
     required this.createdAt,
     required this.authorUsername,
     this.media = const [],
+    this.likeCount = 0,
+    this.commentCount = 0,
+    this.likedByMe = false,
   });
 
   factory Post.fromJson(Map<String, dynamic> json) => Post(
@@ -57,6 +66,49 @@ class Post {
         media: [
           for (final m in json['media'] as List? ?? const []) MediaAttachment.fromJson(m as Map<String, dynamic>),
         ],
+        likeCount: json['like_count'] as int? ?? 0,
+        commentCount: json['comment_count'] as int? ?? 0,
+        likedByMe: json['liked_by_me'] as bool? ?? false,
+      );
+
+  Post copyWith({int? likeCount, int? commentCount, bool? likedByMe}) => Post(
+        id: id,
+        authorId: authorId,
+        body: body,
+        createdAt: createdAt,
+        authorUsername: authorUsername,
+        media: media,
+        likeCount: likeCount ?? this.likeCount,
+        commentCount: commentCount ?? this.commentCount,
+        likedByMe: likedByMe ?? this.likedByMe,
+      );
+}
+
+/// A comment on a post.
+class PostComment {
+  final int id;
+  final int postId;
+  final int authorId;
+  final String authorUsername;
+  final String body;
+  final int createdAt;
+
+  PostComment({
+    required this.id,
+    required this.postId,
+    required this.authorId,
+    required this.authorUsername,
+    required this.body,
+    required this.createdAt,
+  });
+
+  factory PostComment.fromJson(Map<String, dynamic> json) => PostComment(
+        id: json['id'] as int,
+        postId: json['post_id'] as int,
+        authorId: json['author_id'] as int,
+        authorUsername: json['author_username'] as String,
+        body: json['body'] as String,
+        createdAt: json['created_at'] as int,
       );
 }
 
@@ -175,6 +227,9 @@ class ChatMessage {
   /// The message exactly as the server sent it: what the device stores.
   final Map<String, dynamic> json;
 
+  /// Emoji reactions, grouped by emoji, oldest group first.
+  final List<MessageReaction> reactions;
+
   ChatMessage({
     required this.id,
     required this.conversationId,
@@ -185,6 +240,7 @@ class ChatMessage {
     required this.senderUsername,
     this.media = const [],
     this.json = const {},
+    this.reactions = const [],
   });
 
   factory ChatMessage.fromJson(Map<String, dynamic> json) => ChatMessage(
@@ -192,6 +248,9 @@ class ChatMessage {
         conversationId: json['conversation_id'] as int,
         seq: json['seq'] as int? ?? 0,
         json: json,
+        reactions: [
+          for (final r in json['reactions'] as List? ?? const []) MessageReaction.fromJson(r as Map<String, dynamic>),
+        ],
         senderId: json['sender_id'] as int,
         body: json['body'] as String,
         createdAt: json['created_at'] as int,
@@ -199,6 +258,19 @@ class ChatMessage {
         media: [
           for (final m in json['media'] as List? ?? const []) MediaAttachment.fromJson(m as Map<String, dynamic>),
         ],
+      );
+}
+
+/// Everyone who reacted to a message with one emoji.
+class MessageReaction {
+  final String emoji;
+  final List<int> userIds;
+
+  MessageReaction({required this.emoji, required this.userIds});
+
+  factory MessageReaction.fromJson(Map<String, dynamic> json) => MessageReaction(
+        emoji: json['emoji'] as String,
+        userIds: [for (final id in json['user_ids'] as List) id as int],
       );
 }
 

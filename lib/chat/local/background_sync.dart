@@ -8,6 +8,7 @@ import '../../data/services/api_service.dart';
 import '../../data/services/service_providers.dart';
 import '../../data/services/socket_provider.dart';
 import '../../session/current_user_provider.dart';
+import '../reactions.dart';
 import 'local_chat.dart';
 
 /// While the app is open and someone is signed in: new messages in *any*
@@ -54,6 +55,19 @@ class ChatBackgroundSync {
             await _reportDelivered(conversationId);
           }),
         );
+      case 'reaction_updated':
+        // Someone (maybe you, on another device) reacted: update the copy here.
+        final conversationId = event['conversationId'];
+        final messageId = event['messageId'];
+        final userId = event['userId'];
+        if (conversationId is! int || messageId is! int || userId is! int) return;
+        unawaited(_guard(() => applyReaction(
+              store,
+              conversationId: conversationId,
+              messageId: messageId,
+              userId: userId,
+              emoji: event['emoji'] as String?,
+            )));
       case 'reconnected':
         unawaited(catchUpAll());
     }

@@ -221,6 +221,16 @@ void main() {
     expect(jsonDecode(stored.json), {'seq': 1, 'body': 'message 1'});
   });
 
+  test('a stored message can be found by id and its JSON replaced in place', () async {
+    await ChatSync(store, FakeServer(3)).syncLatest(1);
+    final stored = await store.byMessageId(1, 1002);
+    expect(stored?.seq, 2);
+    await store.updateJson(1, 1002, jsonEncode({'seq': 2, 'body': 'message 2', 'reactions': ['x']}));
+    expect(jsonDecode((await store.byMessageId(1, 1002))!.json)['reactions'], ['x']);
+    expect(await store.byMessageId(1, 9999), isNull);
+    await store.updateJson(1, 9999, '{}'); // not here: nothing happens
+  });
+
   test('clear forgets everything', () async {
     await ChatSync(store, FakeServer(5)).syncLatest(1);
     await store.clear();

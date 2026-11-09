@@ -9,6 +9,8 @@ import '../models/models.dart';
 import 'chat_outbox.dart';
 import 'conversation_notifier.dart';
 import 'message_info_sheet.dart';
+import 'emoji_picking.dart';
+import 'message_actions.dart';
 
 /// Compose/Android: ≈ a screen composable doing
 /// `val state by vm.state.collectAsState()` with
@@ -150,11 +152,30 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
                         final isMine = message.senderId == currentUserId;
                         // Every message of yours shows how far it got (✓, ✓✓,
                         // blue ✓✓); long-press for who has read it.
+                        final notifier = ref.read(conversationProvider(widget.conversationId).notifier);
                         return _MessageBubble(
                           message: message,
                           isMine: isMine,
                           tick: isMine ? vm.tickFor(message.id, currentUserId: currentUserId) : null,
-                          onLongPress: isMine ? () => showMessageInfo(context, message, vm, currentUserId) : null,
+                          // React to any message; your own also have Message info.
+                          onLongPress: () => showMessageActions(
+                            context,
+                            message: message,
+                            currentUserId: currentUserId,
+                            onReact: (emoji) => notifier.react(message, emoji),
+                            onInfo: isMine ? () => showMessageInfo(context, message, vm, currentUserId) : null,
+                          ),
+                          reactions: message.reactions.isEmpty
+                              ? null
+                              : ReactionChips(
+                                  message: message,
+                                  currentUserId: currentUserId,
+                                  usernames: vm.usernameByUserId,
+                                  onRemoveMine: () {
+                                    final mine = message.reactions.firstWhere((r) => r.userIds.contains(currentUserId));
+                                    notifier.react(message, mine.emoji); // same emoji again removes it
+                                  },
+                                ),
                         );
                       },
                     ),
@@ -174,6 +195,11 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
                   Row(
                     children: [
                       AddMediaButton(draftKey: _draftKey),
+                      IconButton(
+                        tooltip: 'Emoji',
+                        icon: const Icon(Icons.emoji_emotions_outlined),
+                        onPressed: () => showEmojiKeyboard(context, _controller),
+                      ),
                       Expanded(
                         child: TextField(
                           controller: _controller,
@@ -234,7 +260,10 @@ class _MessageBubble extends StatelessWidget {
   /// How far it got (your messages only).
   final MessageTick? tick;
   final VoidCallback? onLongPress;
-  const _MessageBubble({required this.message, required this.isMine, this.tick, this.onLongPress});
+
+  /// The reactions under the bubble, if any.
+  final Widget? reactions;
+  const _MessageBubble({required this.message, required this.isMine, this.tick, this.onLongPress, this.reactions});
 
   @override
   Widget build(BuildContext context) {
@@ -281,6 +310,8 @@ class _MessageBubble extends StatelessWidget {
             ),
           ),
         ),
+        if (reactions != null)
+          Padding(padding: const EdgeInsets.only(bottom: 4), child: reactions),
       ],
     );
   }

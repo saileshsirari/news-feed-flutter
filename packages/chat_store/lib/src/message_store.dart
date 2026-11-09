@@ -66,6 +66,19 @@ class MessageStore {
     });
   }
 
+  /// One stored message by its server id, if this device has it.
+  Future<StoredMessage?> byMessageId(int conversationId, int messageId) => (db.select(db.chatMessages)
+        ..where((m) => m.conversationId.equals(conversationId) & m.messageId.equals(messageId)))
+      .getSingleOrNull();
+
+  /// Replaces a stored message's JSON (e.g. its reactions changed), keeping
+  /// its place; does nothing if this device doesn't have it.
+  Future<void> updateJson(int conversationId, int messageId, String json) async {
+    await (db.update(db.chatMessages)
+          ..where((m) => m.conversationId.equals(conversationId) & m.messageId.equals(messageId)))
+        .write(ChatMessagesCompanion(json: Value(json)));
+  }
+
   /// This conversation's runs, newest first.
   Future<List<SeqRange>> ranges(int conversationId) async {
     final rows = await (db.select(db.syncedRanges)

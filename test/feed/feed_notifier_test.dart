@@ -24,6 +24,8 @@ void main() {
   late List<http.Request> requests;
   // GET /feed/1/new answers with these.
   late List<Map<String, dynamic>> newerPosts;
+  // The server's like count after a like; null makes liking fail.
+  late int? serverLikeCount;
 
   setUp(() {
     // Logged in as user 1 with 12 followers.
@@ -31,6 +33,7 @@ void main() {
     socket = FakeSocket();
     requests = [];
     newerPosts = [];
+    serverLikeCount = 8;
   });
 
   Future<(ProviderContainer, ProviderSubscription<FeedState>)> open() async {
@@ -51,6 +54,11 @@ void main() {
             200,
           );
         }
+        if (path == '/posts/20/like') {
+          final count = serverLikeCount;
+          if (count == null) return http.Response('{"error":"boom"}', 500);
+          return http.Response(jsonEncode({'likeCount': count, 'liked': request.method == 'PUT'}), 200);
+        }
         // POST /posts
         return http.Response(jsonEncode({...post(21), 'fanoutMs': 4.5}), 201);
       }),
@@ -64,6 +72,39 @@ void main() {
     await pumpEventQueue();
     return (container, sub);
   }
+
+  test('a like shows at once, then takes the server\'s count', () async {
+    final (container, sub) = await open();
+    final notifier = container.read(feedProvider.notifier);
+
+    final liking = notifier.toggleLike(20);
+    expect(sub.read().posts.first.likedByMe, isTrue);
+    expect(sub.read().posts.first.likeCount, 1); // straight away
+    await liking;
+    expect(sub.read().posts.first.likeCount, 8); // others liked it too
+    expect(requests.last.method, 'PUT');
+
+    serverLikeCount = 7;
+    await notifier.toggleLike(20);
+    expect(sub.read().posts.first.likedByMe, isFalse);
+    expect(sub.read().posts.first.likeCount, 7);
+    expect(requests.last.method, 'DELETE');
+  });
+
+  test('a like that fails is put back, and says so', () async {
+    final (container, sub) = await open();
+    serverLikeCount = null;
+    await container.read(feedProvider.notifier).toggleLike(20);
+    expect(sub.read().posts.first.likedByMe, isFalse);
+    expect(sub.read().posts.first.likeCount, 0);
+    expect(sub.read().error, startsWith('Couldn\'t like'));
+  });
+
+  test('reads likes and comments from the feed, and keeps the comment count in step', () async {
+    final (container, sub) = await open();
+    container.read(feedProvider.notifier).setCommentCount(19, 3);
+    expect(sub.read().posts.firstWhere((p) => p.id == 19).commentCount, 3);
+  });
 
   test('loads the first page for the logged-in user', () async {
     final (_, sub) = await open();

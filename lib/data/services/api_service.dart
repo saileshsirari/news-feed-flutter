@@ -38,6 +38,51 @@ class ApiService {
   /// Who the access token belongs to (created on first sign-in).
   Future<User> getMe() async => User.fromJson(_decodeObject(await _http.get(_uri('/me'))));
 
+  /// Likes (or with [liked] false, unlikes) a post; returns the new count.
+  Future<int> likePost(int postId, {required int userId, required bool liked}) async {
+    final request = http.Request(liked ? 'PUT' : 'DELETE', _uri('/posts/$postId/like', {'userId': userId}))
+      ..headers['Content-Type'] = 'application/json'
+      ..body = jsonEncode({'userId': userId});
+    final res = await http.Response.fromStream(await _http.send(request));
+    return _decodeObject(res)['likeCount'] as int;
+  }
+
+  /// Oldest first; pass the returned cursor for the next page.
+  Future<({List<PostComment> comments, String? nextCursor})> getComments(int postId, int userId, {String? cursor}) async {
+    final res = await _http.get(_uri('/posts/$postId/comments', {'userId': userId, 'cursor': ?cursor}));
+    final json = _decodeObject(res);
+    return (
+      comments: [for (final c in json['comments'] as List) PostComment.fromJson(c as Map<String, dynamic>)],
+      nextCursor: json['nextCursor'] as String?,
+    );
+  }
+
+  Future<PostComment> addComment(int postId, {required int userId, required String body}) async {
+    final res = await _http.post(
+      _uri('/posts/$postId/comments'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'userId': userId, 'body': body}),
+    );
+    return PostComment.fromJson(_decodeObject(res));
+  }
+
+  Future<void> deleteComment(int postId, int commentId, {required int userId}) async {
+    final res = await _http.delete(_uri('/posts/$postId/comments/$commentId', {'userId': userId}));
+    if (res.statusCode >= 400) throw ApiException(res.statusCode, res.body);
+  }
+
+  /// Sets your reaction on a chat message, or removes it ([emoji] null).
+  Future<void> react(int conversationId, int messageId, {required int userId, required String? emoji}) async {
+    final request = http.Request(
+      emoji == null ? 'DELETE' : 'PUT',
+      _uri('/conversations/$conversationId/messages/$messageId/reaction', {'userId': userId}),
+    )
+      ..headers['Content-Type'] = 'application/json'
+      ..body = jsonEncode({'userId': userId, 'emoji': ?emoji});
+    final res = await http.Response.fromStream(await _http.send(request));
+    if (res.statusCode >= 400) throw ApiException(res.statusCode, res.body);
+  }
+
   /// Registers this install (or refreshes it) for the signed-in user;
   /// returns its id on the server (push addresses are stored against it).
   Future<int> registerDevice(String installId, {required String name, required String platform}) async {

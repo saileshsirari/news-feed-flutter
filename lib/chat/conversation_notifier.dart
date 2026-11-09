@@ -11,6 +11,7 @@ import '../session/current_user_provider.dart';
 import 'chat_outbox.dart';
 import 'local/local_chat.dart';
 import 'message_sender.dart';
+import 'reactions.dart';
 
 /// Where one of your messages has got to, like WhatsApp's ticks: on the
 /// server (✓), on every other member's device (✓✓), read by every other
@@ -287,6 +288,32 @@ class ConversationNotifier extends Notifier<ConversationState> {
         // Best-effort — an unread badge staying stale is not worth an error.
         .catchError((Object _) {});
   }
+
+  /// Your reaction on a message: shown at once (the stored copy changes, and
+  /// the list follows it), then sent; put back if sending fails. Picking
+  /// your current reaction again removes it.
+  Future<void> react(ChatMessage message, String emoji) async {
+    String? previous;
+    for (final r in message.reactions) {
+      if (r.userIds.contains(_currentUserId)) previous = r.emoji;
+    }
+    final next = previous == emoji ? null : emoji;
+    await _setReaction(message.id, next);
+    try {
+      await ref.read(apiServiceProvider).react(conversationId, message.id, userId: _currentUserId, emoji: next);
+    } catch (e) {
+      await _setReaction(message.id, previous);
+      if (ref.mounted) state = state.copyWith(error: 'Couldn\'t react: $e');
+    }
+  }
+
+  Future<void> _setReaction(int messageId, String? emoji) => applyReaction(
+        _store,
+        conversationId: conversationId,
+        messageId: messageId,
+        userId: _currentUserId,
+        emoji: emoji,
+      );
 
   /// Sends text right away (retrying once on a dropped connection, see
   /// sendWithOneRetry). Messages with photos or videos go through
