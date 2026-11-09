@@ -7,3 +7,4 @@
 //!
 //! Never our own crypto: all of it is OpenMLS and its RustCrypto provider.
 pub mod api;
+mod frb_generated;

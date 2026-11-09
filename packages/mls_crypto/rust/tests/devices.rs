@@ -1,16 +1,13 @@
-use mls_crypto::api::device::{MlsDevice, Received};
+use mls_crypto::api::device::MlsDevice;
 
 fn device(name: &str) -> MlsDevice {
     MlsDevice::new(name.as_bytes().to_vec()).unwrap()
 }
 
 fn read(device: &mut MlsDevice, group: &[u8], message: &[u8]) -> (String, String) {
-    match device.receive(group.to_vec(), message.to_vec()).unwrap() {
-        Received::Message { sender, plaintext } => {
-            (String::from_utf8(sender).unwrap(), String::from_utf8(plaintext).unwrap())
-        }
-        Received::GroupChanged => panic!("expected a message, got a group change"),
-    }
+    let received = device.receive(group.to_vec(), message.to_vec()).unwrap();
+    assert!(received.is_message(), "expected a message, got a group change");
+    (String::from_utf8(received.sender.unwrap()).unwrap(), String::from_utf8(received.plaintext.unwrap()).unwrap())
 }
 
 const GROUP: &[u8] = b"conversation:5";
@@ -51,7 +48,7 @@ fn a_third_member_joins_and_everyone_reads_them() {
 
     // Bob adds Carol: Carol gets a welcome, Alice gets the group change.
     let invitation = bob.add_member(GROUP.to_vec(), carol.key_package().unwrap()).unwrap();
-    assert!(matches!(alice.receive(GROUP.to_vec(), invitation.commit).unwrap(), Received::GroupChanged));
+    assert!(!alice.receive(GROUP.to_vec(), invitation.commit).unwrap().is_message()); // a group change
     carol.join(invitation.welcome).unwrap();
 
     let hello = carol.encrypt(GROUP.to_vec(), b"hello both".to_vec()).unwrap();

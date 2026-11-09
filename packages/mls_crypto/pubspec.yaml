@@ -1,0 +1,20 @@
+name: mls_crypto
+description: End-to-end encryption for chats (MLS through OpenMLS, in Rust), callable from Dart. Bytes in, bytes out; secrets stay in Rust. Knows nothing about the app.
+publish_to: 'none'
+version: 0.1.0
+
+environment:
+  sdk: ^3.13.4
+
+dependencies:
+  flutter:
+    sdk: flutter
+  # The Dart <-> Rust bridge, and the build hook that compiles the Rust crate
+  # for each platform (as part of a normal flutter build).
+  flutter_rust_bridge: 2.13.0
+  flutter_rust_bridge_hooks: 2.13.0
+
+dev_dependencies:
+  flutter_lints: ^6.0.0
+  flutter_test:
+    sdk: flutter

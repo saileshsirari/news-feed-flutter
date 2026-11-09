@@ -32,13 +32,19 @@ pub struct Invitation {
     pub welcome: Vec<u8>,
 }
 
-/// What came out of an incoming MLS message.
-pub enum Received {
-    /// A chat message: the text (or whatever bytes) a member sent.
-    Message { sender: Vec<u8>, plaintext: Vec<u8> },
-    /// A change to the group (someone added, removed, keys updated):
-    /// already applied; nothing to show.
-    GroupChanged,
+/// What came out of an incoming MLS message: a chat message (who sent it,
+/// and the bytes they sent), or, with both empty, a change to the group
+/// (someone added or removed, keys updated) that's already been applied
+/// and has nothing to show.
+pub struct Received {
+    pub sender: Option<Vec<u8>>,
+    pub plaintext: Option<Vec<u8>>,
+}
+
+impl Received {
+    pub fn is_message(&self) -> bool {
+        self.plaintext.is_some()
+    }
 }
 
 /// One device's encryption state: its identity keys and the MLS groups it's
@@ -158,12 +164,14 @@ impl MlsDevice {
         let processed = group.process_message(provider, protocol_message).map_err(|e| err("decrypting", e))?;
         let sender = processed.credential().serialized_content().to_vec();
         match processed.into_content() {
-            ProcessedMessageContent::ApplicationMessage(m) => Ok(Received::Message { sender, plaintext: m.into_bytes() }),
+            ProcessedMessageContent::ApplicationMessage(m) => {
+                Ok(Received { sender: Some(sender), plaintext: Some(m.into_bytes()) })
+            }
             ProcessedMessageContent::StagedCommitMessage(commit) => {
                 group.merge_staged_commit(provider, *commit).map_err(|e| err("applying commit", e))?;
-                Ok(Received::GroupChanged)
+                Ok(Received { sender: None, plaintext: None })
             }
-            _ => Ok(Received::GroupChanged),
+            _ => Ok(Received { sender: None, plaintext: None }),
         }
     }
 

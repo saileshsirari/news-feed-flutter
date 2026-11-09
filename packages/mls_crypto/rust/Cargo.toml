@@ -3,7 +3,13 @@ name = "mls_crypto"
 version = "0.1.0"
 edition = "2024"
 
+[lib]
+# cdylib: the library the app loads on Android (and the WebAssembly module
+# on the web); staticlib for iOS later.
+crate-type = ["cdylib", "staticlib", "rlib"]
+
 [dependencies]
+flutter_rust_bridge = "=2.13.0"
 openmls = "0.9.2"
 openmls_basic_credential = "0.6.0"
 openmls_rust_crypto = "0.6.0"
@@ -15,3 +21,6 @@ openmls = { version = "0.9.2", features = ["js"] }
 # Older crypto libraries inside OpenMLS's provider use getrandom 0.2, which
 # needs the same switch of its own.
 getrandom_02 = { package = "getrandom", version = "0.2", features = ["js"] }
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(frb_expand)'] }
