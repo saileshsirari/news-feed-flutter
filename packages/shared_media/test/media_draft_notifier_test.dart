@@ -12,6 +12,10 @@ class FakeUploadService implements MediaUploadService {
   var _nextId = 100;
 
   @override
+  Future<SealedAttachment> uploadSealed(PickedMedia media, MediaSealer sealer, {void Function(double progress)? onProgress}) =>
+      throw UnimplementedError();
+
+  @override
   Future<MediaAttachment> upload(PickedMedia media, {void Function(double progress)? onProgress}) {
     final completer = Completer<MediaAttachment>();
     pending.add((media, onProgress, completer));
@@ -62,7 +66,7 @@ void main() {
   late FakeUploadService uploads;
   late FakePreparer preparer;
   late ProviderContainer container;
-  const feed = (id: 'feed', maxItems: 3);
+  const feed = (id: 'feed', maxItems: 3, sealed: false);
 
   void makeContainer({int compressedBytes = 9 * 1024 * 1024}) {
     uploads = FakeUploadService();
@@ -166,7 +170,7 @@ void main() {
 
   test('each composer has its own draft', () {
     final (feedDraft, feedSub) = open(feed);
-    final (_, chatSub) = open((id: 'chat:42', maxItems: 10));
+    final (_, chatSub) = open((id: 'chat:42', maxItems: 10, sealed: false));
     feedDraft.add(image());
 
     expect(feedSub.read().items, hasLength(1));

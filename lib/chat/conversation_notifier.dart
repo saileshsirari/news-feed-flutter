@@ -357,6 +357,21 @@ class ConversationNotifier extends Notifier<ConversationState> {
   /// Your reaction on a message: shown at once (the stored copy changes, and
   /// the list follows it), then sent; put back if sending fails. Picking
   /// your current reaction again removes it.
+  /// A fresh link to one of [message]'s encrypted files (the server's
+  /// links expire, and an encrypted message is stored once, so its own
+  /// copy of them goes stale): the message fetched again, just for that.
+  Future<Uri?> encryptedFileLink(ChatMessage message, int mediaId) async {
+    final page = await ref
+        .read(apiServiceProvider)
+        .getMessagesBySeq(conversationId, _currentUserId, afterSeq: message.seq - 1, limit: 1);
+    for (final json in page.messages) {
+      for (final file in json['media'] as List? ?? const []) {
+        if (file is Map && file['id'] == mediaId) return Uri.parse(file['url'] as String);
+      }
+    }
+    return null;
+  }
+
   Future<void> react(ChatMessage message, String emoji) async {
     String? previous;
     for (final r in message.reactions) {

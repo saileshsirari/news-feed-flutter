@@ -1,5 +1,6 @@
 import 'package:shared_media/shared_media.dart';
 
+import '../../e2e/mls_media_sealer.dart';
 import '../../session/current_user_provider.dart';
 import 'service_providers.dart';
 
@@ -17,4 +18,6 @@ final mediaOverrides = [
       httpClient: ref.watch(apiHttpClientProvider),
     ),
   ),
+  // Encrypted chats' photos and videos: sealed on the device before upload.
+  mediaSealerProvider.overrideWithValue(const MlsMediaSealer()),
 ];

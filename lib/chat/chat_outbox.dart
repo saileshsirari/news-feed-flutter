@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/misc.dart' show KeepAliveLink;
 import 'package:shared_media/shared_media.dart';
 import '../data/services/api_service.dart';
 import '../data/services/service_providers.dart';
+import '../e2e/e2e_chats.dart';
 import '../models/models.dart';
 import '../session/current_user_provider.dart';
 import 'message_sender.dart';
@@ -151,21 +152,33 @@ class ChatOutboxNotifier extends Notifier<ChatOutboxState> {
     if (message == null) return;
     _replace(message.copyWith(status: PendingStatus.sending));
     try {
-      final sent = await sendWithOneRetry(
-        ref.read(apiServiceProvider),
-        conversationId,
-        senderId: _userId,
-        body: message.body,
-        clientMessageId: clientMessageId,
-        mediaIds: mediaIds,
-      );
+      final sent = message.draftKey.sealed
+          // An encrypted chat: the files' keys go inside the encrypted message.
+          ? await ref.read(e2eChatsProvider(_userId)).send(
+              conversationId,
+              message.body,
+              clientMessageId: clientMessageId,
+              media: ref.read(mediaDraftProvider(message.draftKey)).sealedAttachments!,
+            )
+          : await sendWithOneRetry(
+              ref.read(apiServiceProvider),
+              conversationId,
+              senderId: _userId,
+              body: message.body,
+              clientMessageId: clientMessageId,
+              mediaIds: mediaIds,
+            );
       if (!ref.mounted) return;
       _remove(clientMessageId);
       state = state.copyWith(sent: [...state.sent, sent]);
     } catch (e) {
       if (!ref.mounted || _find(clientMessageId) == null) return;
       // Too fast: say so, so it's clear a retry later will work.
-      final reason = e is ApiException && e.isRateLimited ? tooFastMessage(e.retryAfter) : 'Couldn\'t send';
+      final reason = switch (e) {
+        ApiException(isRateLimited: true) => tooFastMessage(e.retryAfter),
+        E2eUnavailable() => e.message,
+        _ => 'Couldn\'t send',
+      };
       _replace(message.copyWith(status: PendingStatus.failed, error: reason));
     }
   }

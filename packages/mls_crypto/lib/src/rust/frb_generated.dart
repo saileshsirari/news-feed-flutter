@@ -4,6 +4,7 @@
 // ignore_for_file: unused_import, unused_element, unnecessary_import, duplicate_ignore, invalid_use_of_internal_member, annotate_overrides, non_constant_identifier_names, curly_braces_in_flow_control_structures, prefer_const_literals_to_create_immutables, unused_field
 
 import 'api/device.dart';
+import 'api/file.dart';
 
 import 'dart:async';
 import 'dart:convert';
@@ -67,7 +68,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.13.0';
 
   @override
-  int get rustContentHash => 300915643;
+  int get rustContentHash => 1263838128;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -146,7 +147,14 @@ abstract class RustLibApi extends BaseApi {
     required List<int> key,
   });
 
+  Future<Uint8List> crateApiFileOpenFile({
+    required List<int> key,
+    required List<int> ciphertext,
+  });
+
   Future<bool> crateApiDeviceReceivedIsMessage({required Received that});
+
+  Future<SealedFile> crateApiFileSealFile({required List<int> plaintext});
 
   RustArcIncrementStrongCountFnType
   get rust_arc_increment_strong_count_MlsDevice;
@@ -686,6 +694,40 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
+  Future<Uint8List> crateApiFileOpenFile({
+    required List<int> key,
+    required List<int> ciphertext,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_list_prim_u_8_loose(key, serializer);
+          sse_encode_list_prim_u_8_loose(ciphertext, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 15,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_list_prim_u_8_strict,
+          decodeErrorData: sse_decode_mls_error,
+        ),
+        constMeta: kCrateApiFileOpenFileConstMeta,
+        argValues: [key, ciphertext],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiFileOpenFileConstMeta => const TaskConstMeta(
+    debugName: "open_file",
+    argNames: ["key", "ciphertext"],
+  );
+
+  @override
   Future<bool> crateApiDeviceReceivedIsMessage({required Received that}) {
     return handler.executeNormal(
       NormalTask(
@@ -695,7 +737,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 15,
+            funcId: 16,
             port: port_,
           );
         },
@@ -712,6 +754,34 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
   TaskConstMeta get kCrateApiDeviceReceivedIsMessageConstMeta =>
       const TaskConstMeta(debugName: "received_is_message", argNames: ["that"]);
+
+  @override
+  Future<SealedFile> crateApiFileSealFile({required List<int> plaintext}) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_list_prim_u_8_loose(plaintext, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 17,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_sealed_file,
+          decodeErrorData: sse_decode_mls_error,
+        ),
+        constMeta: kCrateApiFileSealFileConstMeta,
+        argValues: [plaintext],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiFileSealFileConstMeta =>
+      const TaskConstMeta(debugName: "seal_file", argNames: ["plaintext"]);
 
   RustArcIncrementStrongCountFnType
   get rust_arc_increment_strong_count_MlsDevice => wire
@@ -829,6 +899,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     return Received(
       sender: dco_decode_opt_list_prim_u_8_strict(arr[0]),
       plaintext: dco_decode_opt_list_prim_u_8_strict(arr[1]),
+    );
+  }
+
+  @protected
+  SealedFile dco_decode_sealed_file(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 2)
+      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
+    return SealedFile(
+      key: dco_decode_list_prim_u_8_strict(arr[0]),
+      ciphertext: dco_decode_list_prim_u_8_strict(arr[1]),
     );
   }
 
@@ -983,6 +1065,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_sender = sse_decode_opt_list_prim_u_8_strict(deserializer);
     var var_plaintext = sse_decode_opt_list_prim_u_8_strict(deserializer);
     return Received(sender: var_sender, plaintext: var_plaintext);
+  }
+
+  @protected
+  SealedFile sse_decode_sealed_file(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_key = sse_decode_list_prim_u_8_strict(deserializer);
+    var var_ciphertext = sse_decode_list_prim_u_8_strict(deserializer);
+    return SealedFile(key: var_key, ciphertext: var_ciphertext);
   }
 
   @protected
@@ -1152,6 +1242,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_opt_list_prim_u_8_strict(self.sender, serializer);
     sse_encode_opt_list_prim_u_8_strict(self.plaintext, serializer);
+  }
+
+  @protected
+  void sse_encode_sealed_file(SealedFile self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_list_prim_u_8_strict(self.key, serializer);
+    sse_encode_list_prim_u_8_strict(self.ciphertext, serializer);
   }
 
   @protected

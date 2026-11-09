@@ -68,6 +68,17 @@ class MlsReceived {
   bool get isMessage => plaintext != null;
 }
 
+/// A photo or video sealed under a key of its own (see sealFile).
+class MlsSealedFile {
+  const MlsSealedFile({required this.key, required this.ciphertext});
+
+  /// 32 random bytes; send it only inside an encrypted message.
+  final Uint8List key;
+
+  /// What gets uploaded.
+  final Uint8List ciphertext;
+}
+
 /// Something went wrong in the encryption library (never anything secret).
 class MlsException implements Exception {
   const MlsException(this.message);

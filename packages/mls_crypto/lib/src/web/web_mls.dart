@@ -30,6 +30,16 @@ Future<MlsDevice> restoreDevice(List<int> sealed, List<int> key) async {
   return _WebDevice(_guard(() => module.webMlsDevice.restore(_bytes(sealed), _bytes(key))));
 }
 
+Future<MlsSealedFile> sealFile(List<int> plaintext) async => _guard(() {
+      final sealed = _loaded.sealFile(_bytes(plaintext));
+      return MlsSealedFile(key: sealed.key.toDart, ciphertext: sealed.ciphertext.toDart);
+    });
+
+Future<Uint8List> openFile(List<int> key, List<int> ciphertext) async =>
+    _guard(() => _loaded.openFile(_bytes(key), _bytes(ciphertext)).toDart);
+
+_Module get _loaded => _module ?? (throw const MlsException('call initMlsCrypto() first'));
+
 JSUint8Array _bytes(List<int> bytes) => (bytes is Uint8List ? bytes : Uint8List.fromList(bytes)).toJS;
 
 /// A Rust error arrives as a JavaScript Error.
@@ -105,6 +115,13 @@ extension type _Module(JSObject _) implements JSObject {
   external JSPromise<JSAny?> init(_InitOptions options);
   @JS('WebMlsDevice')
   external _DeviceClass get webMlsDevice;
+  external _SealedFile sealFile(JSUint8Array plaintext);
+  external JSUint8Array openFile(JSUint8Array key, JSUint8Array ciphertext);
+}
+
+extension type _SealedFile(JSObject _) implements JSObject {
+  external JSUint8Array get key;
+  external JSUint8Array get ciphertext;
 }
 
 /// The WebMlsDevice class itself: its constructor, and static restore().

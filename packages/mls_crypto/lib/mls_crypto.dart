@@ -10,6 +10,7 @@
 library;
 
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'src/mls_device.dart';
 import 'src/native/native_mls.dart' if (dart.library.js_interop) 'src/web/web_mls.dart' as platform;
@@ -27,6 +28,15 @@ Future<MlsDevice> createMlsDevice(List<int> identity) => platform.createDevice(i
 /// wrong or the bytes were changed.
 Future<MlsDevice> restoreMlsDevice(List<int> sealed, List<int> key) => platform.restoreDevice(sealed, key);
 
+/// Encrypts a photo or video before upload, under a fresh random key of
+/// its own (AES-256-GCM). The server stores only [MlsSealedFile.ciphertext];
+/// the key goes inside the encrypted chat message.
+Future<MlsSealedFile> sealFile(List<int> plaintext) => platform.sealFile(plaintext);
+
+/// The file [sealFile] sealed; throws [MlsException] if [key] is wrong or
+/// the bytes were changed (a swapped or damaged download).
+Future<Uint8List> openFile(List<int> key, List<int> ciphertext) => platform.openFile(key, ciphertext);
+
 /// Two throwaway devices exchange an encrypted message: "OK (…)" if this
 /// platform's build works, or what went wrong. For debug builds and checks.
 Future<String> mlsSelfTest() async {
@@ -40,7 +50,9 @@ Future<String> mlsSelfTest() async {
     await bob.join(invitation.welcome);
     final ciphertext = await alice.encrypt(group, utf8.encode('hello'));
     final received = await bob.receive(group, ciphertext);
-    final ok = received.plaintext != null && utf8.decode(received.plaintext!) == 'hello';
+    final sealed = await sealFile(utf8.encode('photo'));
+    final opened = utf8.decode(await openFile(sealed.key, sealed.ciphertext));
+    final ok = received.plaintext != null && utf8.decode(received.plaintext!) == 'hello' && opened == 'photo';
     return ok ? 'OK (${watch.elapsedMilliseconds} ms)' : 'FAILED: wrong text';
   } on Object catch (e) {
     return 'FAILED: $e';

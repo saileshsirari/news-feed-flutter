@@ -17,3 +17,18 @@ Uint8List? _encode((Uint8List, int) args) {
   img.compositeImage(flat, decoded);
   return img.encodeJpg(flat, quality: quality);
 }
+
+/// A small JPEG of [image] (any format the decoder knows), its longer side
+/// at most [maxSide]; null if it can't be decoded.
+Future<Uint8List?> encodePreviewJpeg(Uint8List image, int maxSide, int quality) =>
+    compute(_preview, (image, maxSide, quality));
+
+Uint8List? _preview((Uint8List, int, int) args) {
+  final (bytes, maxSide, quality) = args;
+  final decoded = img.decodeImage(bytes);
+  if (decoded == null) return null;
+  final small = decoded.width >= decoded.height
+      ? img.copyResize(decoded, width: decoded.width < maxSide ? decoded.width : maxSide)
+      : img.copyResize(decoded, height: decoded.height < maxSide ? decoded.height : maxSide);
+  return img.encodeJpg(small, quality: quality);
+}

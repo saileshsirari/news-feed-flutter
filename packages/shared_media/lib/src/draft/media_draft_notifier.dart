@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/media_limits.dart';
 import '../models/picked_media.dart';
 import '../providers.dart';
+import '../sealed/media_sealer.dart';
 import '../settings/media_settings.dart';
 import 'media_draft.dart';
 
@@ -13,7 +14,7 @@ import 'media_draft.dart';
 class MediaDraftNotifier extends Notifier<MediaDraftState> {
   MediaDraftNotifier(this.draftKey);
 
-  /// The family argument: `mediaDraftProvider((id: 'chat:42', maxItems: 10))`.
+  /// The family argument: `mediaDraftProvider((id: 'chat:42', maxItems: 10, sealed: false))`.
   final MediaDraftKey draftKey;
   int _nextLocalId = 0;
 
@@ -33,8 +34,8 @@ class MediaDraftNotifier extends Notifier<MediaDraftState> {
       status: problem != null
           ? DraftItemStatus.failed
           : media.needsPreparing
-              ? DraftItemStatus.preparing
-              : DraftItemStatus.uploading,
+          ? DraftItemStatus.preparing
+          : DraftItemStatus.uploading,
       error: problem,
     );
     state = state.copyWith(items: [...state.items, item]);
@@ -45,7 +46,12 @@ class MediaDraftNotifier extends Notifier<MediaDraftState> {
   /// A file already uploaded but never sent is left for the server's
   /// cleanup of unclaimed uploads; nothing to undo here.
   void remove(int localId) {
-    state = state.copyWith(items: [for (final i in state.items) if (i.localId != localId) i]);
+    state = state.copyWith(
+      items: [
+        for (final i in state.items)
+          if (i.localId != localId) i,
+      ],
+    );
   }
 
   /// Moves the item at [from] so it ends up at index [to] (both in the
@@ -81,13 +87,18 @@ class MediaDraftNotifier extends Notifier<MediaDraftState> {
         return;
       }
       try {
-        source = await ref.read(videoPreparerProvider).prepare(
+        source = await ref
+            .read(videoPreparerProvider)
+            .prepare(
               source,
               quality: quality,
               onProgress: (p) => _update(localId, (i) => i.copyWith(progress: p)),
             );
       } catch (_) {
-        _update(localId, (i) => i.copyWith(status: DraftItemStatus.failed, error: 'Couldn\'t read this video. Tap to retry.'));
+        _update(
+          localId,
+          (i) => i.copyWith(status: DraftItemStatus.failed, error: 'Couldn\'t read this video. Tap to retry.'),
+        );
         return;
       }
       // Keep the prepared file, so a failed upload's retry doesn't compress again.
@@ -106,11 +117,15 @@ class MediaDraftNotifier extends Notifier<MediaDraftState> {
 
   Future<void> _upload(int localId, PickedMedia source) async {
     try {
-      final uploaded = await ref.read(mediaUploadServiceProvider).upload(
-            source,
-            onProgress: (p) => _update(localId, (i) => i.copyWith(progress: p)),
-          );
-      _update(localId, (i) => i.copyWith(status: DraftItemStatus.ready, progress: 1, uploaded: uploaded));
+      void progress(double p) => _update(localId, (i) => i.copyWith(progress: p));
+      final service = ref.read(mediaUploadServiceProvider);
+      if (draftKey.sealed) {
+        final sealed = await service.uploadSealed(source, ref.read(mediaSealerProvider), onProgress: progress);
+        _update(localId, (i) => i.copyWith(status: DraftItemStatus.ready, progress: 1, sealed: sealed));
+      } else {
+        final uploaded = await service.upload(source, onProgress: progress);
+        _update(localId, (i) => i.copyWith(status: DraftItemStatus.ready, progress: 1, uploaded: uploaded));
+      }
     } catch (e) {
       _update(localId, (i) => i.copyWith(status: DraftItemStatus.failed, error: 'Upload failed. Tap to retry.'));
     }
@@ -137,5 +152,6 @@ class MediaDraftNotifier extends Notifier<MediaDraftState> {
 }
 
 /// autoDispose: a composer's attachments go away when the composer does.
-final mediaDraftProvider =
-    NotifierProvider.autoDispose.family<MediaDraftNotifier, MediaDraftState, MediaDraftKey>(MediaDraftNotifier.new);
+final mediaDraftProvider = NotifierProvider.autoDispose.family<MediaDraftNotifier, MediaDraftState, MediaDraftKey>(
+  MediaDraftNotifier.new,
+);

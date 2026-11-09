@@ -10,10 +10,10 @@ class SignedUpload {
   const SignedUpload({required this.uploadUrl, required this.method, required this.headers});
 
   factory SignedUpload.fromJson(Map<String, dynamic> json) => SignedUpload(
-        uploadUrl: Uri.parse(json['uploadUrl'] as String),
-        method: json['method'] as String,
-        headers: (json['headers'] as Map).cast<String, String>(),
-      );
+    uploadUrl: Uri.parse(json['uploadUrl'] as String),
+    method: json['method'] as String,
+    headers: (json['headers'] as Map).cast<String, String>(),
+  );
 
   final Uri uploadUrl;
   final String method;
@@ -67,13 +67,18 @@ class MediaApiException implements Exception {
 abstract interface class MediaApi {
   Future<UploadTicket> requestUpload(PickedMedia media);
   Future<MediaAttachment> completeUpload(int mediaId);
+
+  /// For a file encrypted on the device (see MediaSealer): the server is
+  /// told its size and nothing else.
+  Future<UploadTicket> requestSealedUpload(int sizeBytes);
+  Future<void> completeSealedUpload(int mediaId);
 }
 
 /// [MediaApi] over HTTP, acting as [userId] (there's no real auth yet, so
 /// the server takes it in the body, like the rest of the API).
 class HttpMediaApi implements MediaApi {
   HttpMediaApi({required this.baseUrl, required this.userId, http.Client? httpClient})
-      : _http = httpClient ?? http.Client();
+    : _http = httpClient ?? http.Client();
 
   final Uri baseUrl;
   final int userId;
@@ -95,6 +100,17 @@ class HttpMediaApi implements MediaApi {
   @override
   Future<MediaAttachment> completeUpload(int mediaId) async =>
       MediaAttachment.fromJson(await _post('/media/$mediaId/complete', {'userId': userId}));
+
+  /// Just bytes to the server: no type, size in pixels or length.
+  @override
+  Future<UploadTicket> requestSealedUpload(int sizeBytes) async => UploadTicket.fromJson(
+    await _post('/media/uploads', {'userId': userId, 'contentType': sealedContentType, 'sizeBytes': sizeBytes}),
+  );
+
+  @override
+  Future<void> completeSealedUpload(int mediaId) => _post('/media/$mediaId/complete', {'userId': userId});
+
+  static const sealedContentType = 'application/octet-stream';
 
   Future<Map<String, dynamic>> _post(String path, Map<String, dynamic> body) async {
     final res = await _http.post(

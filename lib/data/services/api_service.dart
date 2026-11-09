@@ -183,6 +183,7 @@ class ApiService {
     required int epoch,
     bool changesGroup = false,
     String? clientMessageId,
+    List<int> mediaIds = const [],
   }) async {
     final res = await _http.post(
       _uri('/conversations/$conversationId/messages/encrypted'),
@@ -193,6 +194,7 @@ class ApiService {
         'epoch': epoch,
         if (changesGroup) 'changesGroup': true,
         'clientMessageId': ?clientMessageId,
+        if (mediaIds.isNotEmpty) 'mediaIds': mediaIds,
       }),
     );
     return _decodeObject(res);

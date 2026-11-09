@@ -40,7 +40,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.13.0";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 300915643;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 1263838128;
 
 // Section: executor
 
@@ -744,6 +744,40 @@ fn wire__crate__api__device__MlsDevice_snapshot_impl(
         },
     )
 }
+fn wire__crate__api__file__open_file_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "open_file",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_key = <Vec<u8>>::sse_decode(&mut deserializer);
+            let api_ciphertext = <Vec<u8>>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, crate::api::device::MlsError>((move || {
+                    let output_ok = crate::api::file::open_file(api_key, api_ciphertext)?;
+                    std::result::Result::Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
 fn wire__crate__api__device__received_is_message_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
@@ -772,6 +806,39 @@ fn wire__crate__api__device__received_is_message_impl(
                 transform_result_sse::<_, ()>((move || {
                     let output_ok =
                         Ok::<_, ()>(crate::api::device::Received::is_message(&api_that))?;
+                    std::result::Result::Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
+fn wire__crate__api__file__seal_file_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "seal_file",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_plaintext = <Vec<u8>>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, crate::api::device::MlsError>((move || {
+                    let output_ok = crate::api::file::seal_file(api_plaintext)?;
                     std::result::Result::Ok(output_ok)
                 })())
             }
@@ -889,6 +956,18 @@ impl SseDecode for crate::api::device::Received {
     }
 }
 
+impl SseDecode for crate::api::file::SealedFile {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_key = <Vec<u8>>::sse_decode(deserializer);
+        let mut var_ciphertext = <Vec<u8>>::sse_decode(deserializer);
+        return crate::api::file::SealedFile {
+            key: var_key,
+            ciphertext: var_ciphertext,
+        };
+    }
+}
+
 impl SseDecode for u64 {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -951,7 +1030,9 @@ fn pde_ffi_dispatcher_primary_impl(
         12 => wire__crate__api__device__MlsDevice_receive_impl(port, ptr, rust_vec_len, data_len),
         13 => wire__crate__api__device__MlsDevice_restore_impl(port, ptr, rust_vec_len, data_len),
         14 => wire__crate__api__device__MlsDevice_snapshot_impl(port, ptr, rust_vec_len, data_len),
-        15 => wire__crate__api__device__received_is_message_impl(port, ptr, rust_vec_len, data_len),
+        15 => wire__crate__api__file__open_file_impl(port, ptr, rust_vec_len, data_len),
+        16 => wire__crate__api__device__received_is_message_impl(port, ptr, rust_vec_len, data_len),
+        17 => wire__crate__api__file__seal_file_impl(port, ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }
@@ -1038,6 +1119,24 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::device::Received>
         self
     }
 }
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::file::SealedFile {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.key.into_into_dart().into_dart(),
+            self.ciphertext.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive for crate::api::file::SealedFile {}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::file::SealedFile>
+    for crate::api::file::SealedFile
+{
+    fn into_into_dart(self) -> crate::api::file::SealedFile {
+        self
+    }
+}
 
 impl SseEncode for MlsDevice {
     // Codec=Sse (Serialization based), see doc to use other codecs
@@ -1121,6 +1220,14 @@ impl SseEncode for crate::api::device::Received {
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <Option<Vec<u8>>>::sse_encode(self.sender, serializer);
         <Option<Vec<u8>>>::sse_encode(self.plaintext, serializer);
+    }
+}
+
+impl SseEncode for crate::api::file::SealedFile {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <Vec<u8>>::sse_encode(self.key, serializer);
+        <Vec<u8>>::sse_encode(self.ciphertext, serializer);
     }
 }
 

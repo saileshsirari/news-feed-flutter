@@ -1,10 +1,12 @@
 import '../models/media_attachment.dart';
 import '../models/picked_media.dart';
+import '../models/sealed_attachment.dart';
 
-/// Which composer a draft belongs to, and how many files that feature
-/// allows: e.g. `(id: 'feed', maxItems: 10)` or `(id: 'chat:42', maxItems: 10)`.
+/// Which composer a draft belongs to, how many files that feature allows,
+/// and whether its files are encrypted before upload (an end-to-end
+/// encrypted chat): e.g. `(id: 'feed', maxItems: 10, sealed: false)`.
 /// A record, so two equal keys find the same draft.
-typedef MediaDraftKey = ({String id, int maxItems});
+typedef MediaDraftKey = ({String id, int maxItems, bool sealed});
 
 enum DraftItemStatus {
   /// Being compressed on the device (phone videos), before uploading.
@@ -22,6 +24,7 @@ class DraftItem {
     required this.status,
     this.progress = 0,
     this.uploaded,
+    this.sealed,
     this.error,
   });
 
@@ -35,6 +38,9 @@ class DraftItem {
   /// 0..1 while preparing, and again while uploading.
   final double progress;
   final MediaAttachment? uploaded;
+
+  /// Instead of [uploaded], in a draft whose files are encrypted.
+  final SealedAttachment? sealed;
   final String? error;
 
   DraftItem copyWith({
@@ -42,16 +48,17 @@ class DraftItem {
     DraftItemStatus? status,
     double? progress,
     MediaAttachment? uploaded,
+    SealedAttachment? sealed,
     String? error,
-  }) =>
-      DraftItem(
-        localId: localId,
-        source: source ?? this.source,
-        status: status ?? this.status,
-        progress: progress ?? this.progress,
-        uploaded: uploaded ?? this.uploaded,
-        error: error,
-      );
+  }) => DraftItem(
+    localId: localId,
+    source: source ?? this.source,
+    status: status ?? this.status,
+    progress: progress ?? this.progress,
+    uploaded: uploaded ?? this.uploaded,
+    sealed: sealed ?? this.sealed,
+    error: error,
+  );
 }
 
 class MediaDraftState {
@@ -70,8 +77,13 @@ class MediaDraftState {
   /// The ids to send with the post or message, in order — or null while
   /// anything is still being prepared, uploading, or has failed, since
   /// sending then would silently drop those files.
-  List<int>? get mediaIds =>
-      items.every((i) => i.status == DraftItemStatus.ready) ? [for (final i in items) i.uploaded!.id] : null;
+  List<int>? get mediaIds => _allReady ? [for (final i in items) i.uploaded?.id ?? i.sealed!.mediaId] : null;
+
+  /// For an encrypted draft: what each file is and its key, for the
+  /// encrypted message; null like [mediaIds] until every file is ready.
+  List<SealedAttachment>? get sealedAttachments => _allReady ? [for (final i in items) i.sealed!] : null;
+
+  bool get _allReady => items.every((i) => i.status == DraftItemStatus.ready);
 
   MediaDraftState copyWith({List<DraftItem>? items}) => MediaDraftState(items: items ?? this.items, maxItems: maxItems);
 }

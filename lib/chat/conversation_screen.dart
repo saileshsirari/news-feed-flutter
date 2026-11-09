@@ -42,7 +42,14 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
   /// chat don't show up in another. Sending hands the draft (and its
   /// uploads) to the outbox, and the composer moves on to a new one.
   int _draftGeneration = 0;
-  MediaDraftKey get _draftKey => (id: 'chat:${widget.conversationId}:$_draftGeneration', maxItems: 10);
+  ///
+  /// In an encrypted chat, files are encrypted before they're uploaded
+  /// (sealed). The key changes when the chat becomes encrypted, so files
+  /// picked before then are dropped rather than sent readable.
+  MediaDraftKey get _draftKey {
+    final sealed = ref.read(conversationProvider(widget.conversationId)).isE2e;
+    return (id: 'chat:${widget.conversationId}:$_draftGeneration', maxItems: 10, sealed: sealed);
+  }
 
   @override
   void initState() {
@@ -186,6 +193,7 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
                         return _MessageBubble(
                           message: message,
                           isMine: isMine,
+                          encryptedFileLink: (mediaId) => notifier.encryptedFileLink(message, mediaId),
                           tick: isMine ? vm.tickFor(message.id, currentUserId: currentUserId) : null,
                           // React to any message; your own also have Message info.
                           onLongPress: () => showMessageActions(
@@ -224,8 +232,8 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
                     ),
                   Row(
                     children: [
-                      // Encrypted photos and videos come later (E2E step 7).
-                      if (!vm.isE2e) AddMediaButton(draftKey: _draftKey),
+                      // Not where this device can't read (or send to) the chat.
+                      if (!vm.isE2e || vm.canReadE2e) AddMediaButton(draftKey: _draftKey),
                       IconButton(
                         tooltip: 'Emoji',
                         icon: const Icon(Icons.emoji_emotions_outlined),
@@ -319,7 +327,17 @@ class _MessageBubble extends StatelessWidget {
 
   /// The reactions under the bubble, if any.
   final Widget? reactions;
-  const _MessageBubble({required this.message, required this.isMine, this.tick, this.onLongPress, this.reactions});
+  const _MessageBubble({
+    required this.message,
+    required this.isMine,
+    required this.encryptedFileLink,
+    this.tick,
+    this.onLongPress,
+    this.reactions,
+  });
+
+  /// Where to download one of an encrypted message's files now.
+  final SealedLinkOf encryptedFileLink;
 
   @override
   Widget build(BuildContext context) {
@@ -358,6 +376,12 @@ class _MessageBubble extends StatelessWidget {
                     padding: const EdgeInsets.symmetric(vertical: 4),
                     // Tapping a video plays it full screen (MediaGrid's default).
                     child: MediaGrid(media: message.media),
+                  ),
+                if (message.sealedMedia.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    // Downloaded and decrypted here; tapping works as above.
+                    child: SealedMediaGrid(media: message.sealedMedia, linkOf: encryptedFileLink),
                   ),
                 if (message.body.isNotEmpty) Text(message.body),
                 Align(

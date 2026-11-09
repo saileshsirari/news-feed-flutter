@@ -3,6 +3,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:video_player/video_player.dart';
 
 import '../models/media_attachment.dart';
+import '../sealed/local_media.dart';
 import 'video_tile.dart';
 
 /// Plays one video full screen: tap to pause or play, drag the bar to seek,
@@ -13,16 +14,17 @@ class VideoPlayerScreen extends StatefulWidget {
 
   final MediaAttachment media;
 
-  static Future<void> open(BuildContext context, MediaAttachment media) => Navigator.of(context).push(
-        MaterialPageRoute(fullscreenDialog: true, builder: (_) => VideoPlayerScreen(media: media)),
-      );
+  static Future<void> open(BuildContext context, MediaAttachment media) =>
+      Navigator.of(context)
+          .push(MaterialPageRoute(fullscreenDialog: true, builder: (_) => VideoPlayerScreen(media: media)));
 
   @override
   State<VideoPlayerScreen> createState() => _VideoPlayerScreenState();
 }
 
 class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
-  late final VideoPlayerController _controller = VideoPlayerController.networkUrl(widget.media.url);
+  // A decrypted video plays from this device; anything else streams.
+  late final VideoPlayerController _controller = videoControllerFor(widget.media.url);
   late final Future<void> _initialized = _controller.initialize().then((_) => _controller.play());
 
   @override
@@ -62,7 +64,8 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                           // Rebuilds as playback starts, stops and ends.
                           ValueListenableBuilder(
                             valueListenable: _controller,
-                            builder: (_, value, _) => value.isPlaying ? const SizedBox.shrink() : const PlayBadge(size: 64),
+                            builder: (_, value, _) =>
+                                value.isPlaying ? const SizedBox.shrink() : const PlayBadge(size: 64),
                           ),
                         ],
                       ),
@@ -80,17 +83,20 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                 onPressed: () => Navigator.of(context).pop(),
               ),
             ),
-            Positioned(
-              top: 4,
-              right: 4,
-              child: IconButton(
-                icon: const Icon(Icons.download, color: Colors.white),
-                tooltip: 'Download',
-                // The browser (web) or the phone's browser/downloads saves
-                // it; the link is the same short-lived one we play.
-                onPressed: () => launchUrl(widget.media.url, mode: LaunchMode.externalApplication),
+            // Not for a decrypted video on a phone: it's already on the
+            // device, and another app can't open the app's own files.
+            if (!widget.media.url.isScheme('file'))
+              Positioned(
+                top: 4,
+                right: 4,
+                child: IconButton(
+                  icon: const Icon(Icons.download, color: Colors.white),
+                  tooltip: 'Download',
+                  // The browser (web) or the phone's browser/downloads saves
+                  // it; the link is the same short-lived one we play.
+                  onPressed: () => launchUrl(widget.media.url, mode: LaunchMode.externalApplication),
+                ),
               ),
-            ),
             Positioned(
               left: 12,
               right: 12,

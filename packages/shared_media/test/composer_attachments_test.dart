@@ -17,6 +17,10 @@ class FakeUploadService implements MediaUploadService {
   final progress = <void Function(double)>[];
 
   @override
+  Future<SealedAttachment> uploadSealed(PickedMedia media, MediaSealer sealer, {void Function(double progress)? onProgress}) =>
+      throw UnimplementedError();
+
+  @override
   Future<MediaAttachment> upload(PickedMedia media, {void Function(double progress)? onProgress}) {
     final completer = Completer<MediaAttachment>();
     pending.add(completer);
@@ -36,7 +40,7 @@ class FakePicker implements MediaPicker {
 }
 
 void main() {
-  const key = (id: 'test', maxItems: 3);
+  const key = (id: 'test', maxItems: 3, sealed: false);
   late FakeUploadService uploads;
   late FakePicker picker;
   late ProviderContainer container;

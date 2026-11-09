@@ -14,6 +14,7 @@ import 'package:news_feed_flutter/data/services/api_service.dart';
 import 'package:news_feed_flutter/e2e/e2e_chats.dart';
 import 'package:news_feed_flutter/e2e/e2e_device.dart';
 import 'package:news_feed_flutter/models/models.dart';
+import 'package:shared_media/shared_media.dart';
 
 /// The real Rust library, built for this computer (see packages/mls_crypto/README).
 const _library = 'packages/mls_crypto/rust/target/release/libmls_crypto.dylib';
@@ -39,7 +40,14 @@ class FakeServer {
   var epoch = 0;
   var nextId = 1000;
 
-  Map<String, dynamic> _message(int sender, String mode, {String body = '', String? ciphertext, int? device}) {
+  Map<String, dynamic> _message(
+    int sender,
+    String mode, {
+    String body = '',
+    String? ciphertext,
+    int? device,
+    List<int> mediaIds = const [],
+  }) {
     final m = {
       'id': nextId++,
       'conversation_id': 5,
@@ -51,7 +59,11 @@ class FakeServer {
       'mode': mode,
       'ciphertext': ciphertext,
       'sender_device_id': device,
-      'media': [],
+      // As the server lists an encrypted message's files: just bytes, and a link.
+      'media': [
+        for (final id in mediaIds)
+          {'id': id, 'kind': 'encrypted', 'contentType': 'application/octet-stream', 'sizeBytes': 1, 'url': 'https://bucket.test/$id'},
+      ],
       'reactions': [],
     };
     messages.add(m);
@@ -118,7 +130,9 @@ class FakeServer {
           if (b['changesGroup'] == true) epoch++;
           return json(
             _message(user, b['changesGroup'] == true ? 'commit' : 'e2e',
-                ciphertext: b['ciphertext'] as String, device: b['deviceId'] as int),
+                ciphertext: b['ciphertext'] as String,
+                device: b['deviceId'] as int,
+                mediaIds: [...?(b['mediaIds'] as List?)?.cast<int>()]),
             201,
           );
         }
@@ -252,6 +266,50 @@ void main() {
     await alicePhone.chats.send(5, 'after', clientMessageId: 'c2');
     await engine.sync(5);
     expect(await bobPhone.shown(), ['🔒 End-to-end encryption turned on', 'before', 'after']);
+  });
+
+  test('a photo\'s key goes inside the encrypted message; every device gets it, the server doesn\'t', () async {
+    await alicePhone.chats.turnOn(chat, [1, 2]);
+    await bobPhone.chats.joinWelcomes();
+    final key = Uint8List.fromList(List.generate(32, (i) => i + 100));
+    final photo = SealedAttachment(
+      mediaId: 77,
+      key: key,
+      kind: MediaKind.image,
+      contentType: 'image/jpeg',
+      sizeBytes: 1234,
+      width: 4,
+      height: 3,
+      preview: Uint8List.fromList([1, 2, 3]),
+    );
+
+    final sent = await alicePhone.chats.send(5, 'look', clientMessageId: 'c1', media: [photo]);
+    expect(sent.sealedMedia.single.key, key);
+    expect(sent.media, isEmpty); // the server's copy is bytes, not something to show
+    final stored = server.messages.last;
+    expect((stored['media'] as List).single['id'], 77);
+    expect(base64Decode(stored['ciphertext'] as String), isNot(containsAllInOrder(key.sublist(0, 8))));
+
+    await bobPhone.chats.sync(5);
+    final received = chatMessageFrom((await bobPhone.store.watchFrom(5, 0).first).last);
+    expect(received.body, 'look');
+    final file = received.sealedMedia.single;
+    expect((file.mediaId, file.contentType, file.width), (77, 'image/jpeg', 4));
+    expect(file.key, key);
+    expect(file.preview, [1, 2, 3]);
+  });
+
+  test('previews ride along only while they fit; the rest come without', () {
+    SealedAttachment withPreview(int id, int size) => SealedAttachment(
+          mediaId: id,
+          key: Uint8List(32),
+          kind: MediaKind.image,
+          contentType: 'image/jpeg',
+          sizeBytes: 1,
+          preview: Uint8List(size),
+        );
+    final kept = E2eChats.previewsWithinBudget([withPreview(1, 10000), withPreview(2, 20000), withPreview(3, 9000)]);
+    expect(kept.map((m) => m.preview?.length), [10000, null, 9000]);
   });
 
   test('only one person can turn it on; a second try is refused', () async {

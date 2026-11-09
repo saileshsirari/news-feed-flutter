@@ -11,7 +11,7 @@ enum _MenuAction { settings, logout }
 
 /// The feed's own rule for how many files a post may carry (the server's
 /// MAX_MEDIA_PER_POST); one draft for the compose dialog.
-const _composeDraft = (id: 'feed', maxItems: 10);
+const _composeDraft = (id: 'feed', maxItems: 10, sealed: false);
 
 /// Mirrors news-feed-android's FeedScreen.kt.
 ///

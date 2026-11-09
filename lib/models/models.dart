@@ -232,6 +232,11 @@ class ChatMessage {
   /// Photos and videos, in the order the sender arranged them.
   final List<MediaAttachment> media;
 
+  /// An encrypted message's photos and videos (what each is, and its key),
+  /// from the decrypted message. Its [media] stays empty: the server's
+  /// copies are just encrypted bytes.
+  final List<SealedAttachment> sealedMedia;
+
   /// The message exactly as the server sent it: what the device stores.
   final Map<String, dynamic> json;
 
@@ -262,6 +267,7 @@ class ChatMessage {
     required this.createdAt,
     required this.senderUsername,
     this.media = const [],
+    this.sealedMedia = const [],
     this.json = const {},
     this.reactions = const [],
     this.mode = 'server',
@@ -283,7 +289,12 @@ class ChatMessage {
         createdAt: json['created_at'] as int,
         senderUsername: json['sender_username'] as String,
         media: [
-          for (final m in json['media'] as List? ?? const []) MediaAttachment.fromJson(m as Map<String, dynamic>),
+          // An encrypted message's files are opened from sealedMedia instead.
+          if (json['mode'] != 'e2e')
+            for (final m in json['media'] as List? ?? const []) MediaAttachment.fromJson(m as Map<String, dynamic>),
+        ],
+        sealedMedia: [
+          for (final m in json['sealed_media'] as List? ?? const []) SealedAttachment.fromJson(m as Map<String, dynamic>),
         ],
       );
 }

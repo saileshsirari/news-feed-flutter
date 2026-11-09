@@ -323,6 +323,87 @@ export class WebReceived {
     }
 }
 if (Symbol.dispose) WebReceived.prototype[Symbol.dispose] = WebReceived.prototype.free;
+
+/**
+ * A photo or video sealed under its own key (see api::file).
+ */
+export class WebSealedFile {
+    static __wrap(ptr) {
+        const obj = Object.create(WebSealedFile.prototype);
+        obj.__wbg_ptr = ptr;
+        WebSealedFileFinalization.register(obj, obj.__wbg_ptr, obj);
+        return obj;
+    }
+    __destroy_into_raw() {
+        const ptr = this.__wbg_ptr;
+        this.__wbg_ptr = 0;
+        WebSealedFileFinalization.unregister(this);
+        return ptr;
+    }
+    free() {
+        const ptr = this.__destroy_into_raw();
+        wasm.__wbg_websealedfile_free(ptr, 0);
+    }
+    /**
+     * @returns {Uint8Array}
+     */
+    get ciphertext() {
+        const ret = wasm.websealedfile_ciphertext(this.__wbg_ptr);
+        var v1 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+        wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+        return v1;
+    }
+    /**
+     * @returns {Uint8Array}
+     */
+    get key() {
+        const ret = wasm.websealedfile_key(this.__wbg_ptr);
+        var v1 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+        wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+        return v1;
+    }
+}
+if (Symbol.dispose) WebSealedFile.prototype[Symbol.dispose] = WebSealedFile.prototype.free;
+
+/**
+ * @param {Uint8Array | number[]} key
+ * @param {Uint8Array | number[]} ciphertext
+ * @returns {Uint8Array}
+ */
+export function openFile(key, ciphertext) {
+    let ptr0, len0, ptr1, len1;
+    try {
+        ptr0 = passArray8ToWasm0(key, wasm.__wbindgen_malloc);
+        len0 = WASM_VECTOR_LEN;
+        ptr1 = passArray8ToWasm0(ciphertext, wasm.__wbindgen_malloc);
+        len1 = WASM_VECTOR_LEN;
+    } catch (e) {
+        if (ptr1) { wasm.__wbindgen_free(ptr1, len1 * 1, 1); }
+        if (ptr0) { wasm.__wbindgen_free(ptr0, len0 * 1, 1); }
+        throw e;
+    }
+    const ret = wasm.openFile(ptr0, len0, ptr1, len1);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v3 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v3;
+}
+
+/**
+ * @param {Uint8Array | number[]} plaintext
+ * @returns {WebSealedFile}
+ */
+export function sealFile(plaintext) {
+    const ptr0 = passArray8ToWasm0(plaintext, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.sealFile(ptr0, len0);
+    if (ret[2]) {
+        throw takeFromExternrefTable0(ret[1]);
+    }
+    return WebSealedFile.__wrap(ret[0]);
+}
 function __wbg_get_imports() {
     const import0 = {
         __proto__: null,
@@ -480,6 +561,9 @@ const WebMlsDeviceFinalization = (typeof FinalizationRegistry === 'undefined')
 const WebReceivedFinalization = (typeof FinalizationRegistry === 'undefined')
     ? { register: () => {}, unregister: () => {} }
     : new FinalizationRegistry(ptr => wasm.__wbg_webreceived_free(ptr, 1));
+const WebSealedFileFinalization = (typeof FinalizationRegistry === 'undefined')
+    ? { register: () => {}, unregister: () => {} }
+    : new FinalizationRegistry(ptr => wasm.__wbg_websealedfile_free(ptr, 1));
 
 function addToExternrefTable0(obj) {
     const idx = wasm.__externref_table_alloc();

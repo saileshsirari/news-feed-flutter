@@ -5,6 +5,7 @@ import 'package:chat_store/chat_store.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mls_crypto/mls_crypto.dart';
+import 'package:shared_media/shared_media.dart';
 
 import '../chat/local/local_chat.dart';
 import '../data/services/api_service.dart';
@@ -188,15 +189,23 @@ class E2eChats {
       final received = await device.receive(group, ciphertext);
       if (!received.isMessage) return null; // a group change, applied
       final payload = jsonDecode(utf8.decode(received.plaintext!)) as Map<String, dynamic>;
-      return _decryptedMessage(json, payload['body'] as String? ?? '');
+      return _decryptedMessage(json, payload['body'] as String? ?? '', media: payload['media'] as List?);
     } on Object catch (e) {
       debugPrint('[e2e] message ${json['id']} couldn\'t be decrypted: $e');
       return _decryptedMessage(json, '🔒 This message couldn\'t be decrypted on this device', failed: true);
     }
   }
 
-  RemoteMessage _decryptedMessage(Map<String, dynamic> json, String body, {bool failed = false}) {
-    final message = {...json, 'ciphertext': null, 'body': body, 'decrypted': !failed};
+  /// [media]: what the encrypted message says its files are, with their
+  /// keys (see SealedAttachment), kept as sealed_media.
+  RemoteMessage _decryptedMessage(Map<String, dynamic> json, String body, {bool failed = false, List<dynamic>? media}) {
+    final message = {
+      ...json,
+      'ciphertext': null,
+      'body': body,
+      'decrypted': !failed,
+      if (media != null && media.isNotEmpty) 'sealed_media': media,
+    };
     return RemoteMessage(
       conversationId: json['conversation_id'] as int,
       seq: json['seq'] as int,
@@ -207,16 +216,25 @@ class E2eChats {
     );
   }
 
-  /// Encrypts and sends [text]; stores it here as sent. If the group moved
-  /// on meanwhile, catches up and tries once more.
-  Future<ChatMessage> send(int conversationId, String text, {required String clientMessageId}) => _serially(() async {
+  /// Encrypts and sends [text], with [media] (files already encrypted and
+  /// uploaded, see SealedAttachment): their keys go inside the message.
+  /// Stores it here as sent. If the group moved on meanwhile, catches up
+  /// and tries once more.
+  Future<ChatMessage> send(
+    int conversationId,
+    String text, {
+    required String clientMessageId,
+    List<SealedAttachment> media = const [],
+  }) => _serially(() async {
     final deviceId = await _requireDevice();
     final groupId = await _groupId(conversationId);
     if (groupId == null) throw const E2eUnavailable('This device isn\'t in this encrypted chat.');
     final device = await e2eDevice.device(deviceId);
     final group = utf8.encode(groupId);
+    final files = previewsWithinBudget(media).map((m) => m.toJson()).toList();
+    final payload = {'type': 'text', 'body': text, if (files.isNotEmpty) 'media': files};
     for (var attempt = 0; ; attempt++) {
-      final ciphertext = await device.encrypt(group, utf8.encode(jsonEncode({'type': 'text', 'body': text})));
+      final ciphertext = await device.encrypt(group, utf8.encode(jsonEncode(payload)));
       final epoch = await device.epoch(group);
       await e2eDevice.save();
       try {
@@ -226,8 +244,9 @@ class E2eChats {
           ciphertext: ciphertext,
           epoch: epoch,
           clientMessageId: clientMessageId,
+          mediaIds: [for (final m in media) m.mediaId],
         );
-        final message = _decryptedMessage(json, text);
+        final message = _decryptedMessage(json, text, media: files);
         await store.upsertAll([message]);
         return ChatMessage.fromJson(jsonDecode(message.json) as Map<String, dynamic>);
       } on ApiException catch (e) {
@@ -236,6 +255,27 @@ class E2eChats {
       }
     }
   });
+
+  /// How many bytes of previews one message may carry: they ride inside
+  /// the encrypted message, which the server keeps small.
+  static const previewBudgetBytes = 24 * 1024;
+
+  /// [media] with previews kept in order while they fit the budget; the
+  /// rest show a plain box until they load.
+  static List<SealedAttachment> previewsWithinBudget(List<SealedAttachment> media) {
+    var left = previewBudgetBytes;
+    final kept = <SealedAttachment>[];
+    for (final m in media) {
+      final size = m.preview?.length ?? 0;
+      if (size <= left) {
+        kept.add(m);
+        left -= size;
+      } else {
+        kept.add(m.withoutPreview());
+      }
+    }
+    return kept;
+  }
 
   String _randomHex(int bytes) =>
       List.generate(bytes, (_) => _random.nextInt(256).toRadixString(16).padLeft(2, '0')).join();

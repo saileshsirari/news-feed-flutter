@@ -2,6 +2,7 @@ import 'dart:typed_data';
 
 import '../mls_device.dart';
 import '../rust/api/device.dart' as rust;
+import '../rust/api/file.dart' as rust_file;
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart' show ExternalLibrary;
 
 import '../rust/frb_generated.dart';
@@ -17,6 +18,14 @@ Future<MlsDevice> createDevice(List<int> identity) async =>
 
 Future<MlsDevice> restoreDevice(List<int> sealed, List<int> key) async =>
     _NativeDevice(await _guard(() => rust.MlsDevice.restore(sealed: sealed, key: key)));
+
+Future<MlsSealedFile> sealFile(List<int> plaintext) => _guard(() async {
+      final sealed = await rust_file.sealFile(plaintext: plaintext);
+      return MlsSealedFile(key: sealed.key, ciphertext: sealed.ciphertext);
+    });
+
+Future<Uint8List> openFile(List<int> key, List<int> ciphertext) =>
+    _guard(() => rust_file.openFile(key: key, ciphertext: ciphertext));
 
 Future<T> _guard<T>(Future<T> Function() call) async {
   try {

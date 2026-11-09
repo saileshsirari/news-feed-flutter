@@ -58,6 +58,19 @@ void main() {
     expect(utf8.decode((await aliceWeb.receive(group, hi)).plaintext!), 'hi all');
   });
 
+  test('a file sealed under its own key opens only with that key, unchanged', () async {
+    final photo = utf8.encode('pretend JPEG bytes');
+    final sealed = await sealFile(photo);
+    expect(sealed.key, hasLength(32));
+    expect(utf8.decode(sealed.ciphertext, allowMalformed: true), isNot(contains('JPEG')));
+    expect(await openFile(sealed.key, sealed.ciphertext), photo);
+
+    final other = await sealFile(photo);
+    await expectLater(openFile(other.key, sealed.ciphertext), throwsA(isA<MlsException>()));
+    final tampered = [...sealed.ciphertext]..last ^= 1;
+    await expectLater(openFile(sealed.key, tampered), throwsA(isA<MlsException>()));
+  });
+
   test('the self-test passes on this platform', () async {
     expect(await mlsSelfTest(), startsWith('OK'));
   });

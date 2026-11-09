@@ -125,3 +125,34 @@ impl WebReceived {
         self.plaintext.clone()
     }
 }
+
+/// A photo or video sealed under its own key (see api::file).
+#[wasm_bindgen]
+pub struct WebSealedFile {
+    key: Vec<u8>,
+    ciphertext: Vec<u8>,
+}
+
+#[wasm_bindgen]
+impl WebSealedFile {
+    #[wasm_bindgen(getter)]
+    pub fn key(&self) -> Vec<u8> {
+        self.key.clone()
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn ciphertext(&self) -> Vec<u8> {
+        self.ciphertext.clone()
+    }
+}
+
+#[wasm_bindgen(js_name = sealFile)]
+pub fn seal_file(plaintext: Vec<u8>) -> Result<WebSealedFile, JsError> {
+    let sealed = crate::api::file::seal_file(plaintext).map_err(js_error)?;
+    Ok(WebSealedFile { key: sealed.key, ciphertext: sealed.ciphertext })
+}
+
+#[wasm_bindgen(js_name = openFile)]
+pub fn open_file(key: Vec<u8>, ciphertext: Vec<u8>) -> Result<Vec<u8>, JsError> {
+    crate::api::file::open_file(key, ciphertext).map_err(js_error)
+}

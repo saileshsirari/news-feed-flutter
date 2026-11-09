@@ -18,6 +18,10 @@ class FakePicker implements MediaPicker {
 
 class NeverUploads implements MediaUploadService {
   @override
+  Future<SealedAttachment> uploadSealed(PickedMedia media, MediaSealer sealer, {void Function(double progress)? onProgress}) =>
+      throw UnimplementedError();
+
+  @override
   Future<MediaAttachment> upload(PickedMedia media, {void Function(double progress)? onProgress}) =>
       Completer<MediaAttachment>().future;
 }
@@ -33,7 +37,7 @@ final phoneVideo =
 final photo = PickedMedia(bytes: Uint8List(10), contentType: 'image/jpeg');
 
 void main() {
-  const key = (id: 'test', maxItems: 10);
+  const key = (id: 'test', maxItems: 10, sealed: false);
 
   Future<ProviderContainer> pump(WidgetTester tester, List<PickedMedia> picks, {Map<String, Object> saved = const {}}) async {
     SharedPreferences.setMockInitialValues(saved);

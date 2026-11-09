@@ -26,6 +26,10 @@ class FakeUploads implements MediaUploadService {
   var _nextId = 40;
 
   @override
+  Future<SealedAttachment> uploadSealed(PickedMedia media, MediaSealer sealer, {void Function(double progress)? onProgress}) =>
+      throw UnimplementedError();
+
+  @override
   Future<MediaAttachment> upload(PickedMedia media, {void Function(double progress)? onProgress}) {
     final completer = Completer<MediaAttachment>();
     pending.add(completer);
@@ -44,7 +48,7 @@ class FakeUploads implements MediaUploadService {
 }
 
 final photo = PickedMedia(bytes: Uint8List(10), contentType: 'image/jpeg');
-const draftKey = (id: 'chat:5:0', maxItems: 10);
+const draftKey = (id: 'chat:5:0', maxItems: 10, sealed: false);
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();

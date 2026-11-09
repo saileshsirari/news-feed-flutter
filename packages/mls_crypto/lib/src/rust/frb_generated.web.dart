@@ -7,6 +7,7 @@
 // ignore_for_file: argument_type_not_assignable
 
 import 'api/device.dart';
+import 'api/file.dart';
 
 import 'dart:async';
 import 'dart:convert';
@@ -82,6 +83,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   Received dco_decode_received(dynamic raw);
 
   @protected
+  SealedFile dco_decode_sealed_file(dynamic raw);
+
+  @protected
   BigInt dco_decode_u_64(dynamic raw);
 
   @protected
@@ -148,6 +152,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   Received sse_decode_received(SseDeserializer deserializer);
+
+  @protected
+  SealedFile sse_decode_sealed_file(SseDeserializer deserializer);
 
   @protected
   BigInt sse_decode_u_64(SseDeserializer deserializer);
@@ -230,6 +237,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_received(Received self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_sealed_file(SealedFile self, SseSerializer serializer);
 
   @protected
   void sse_encode_u_64(BigInt self, SseSerializer serializer);

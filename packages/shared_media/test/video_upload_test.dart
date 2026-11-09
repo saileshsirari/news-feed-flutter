@@ -28,6 +28,12 @@ class FakeApi implements MediaApi {
   Future<UploadTicket> requestUpload(PickedMedia media) async => ticket;
 
   @override
+  Future<UploadTicket> requestSealedUpload(int sizeBytes) async => ticket;
+
+  @override
+  Future<void> completeSealedUpload(int mediaId) async => completed = mediaId;
+
+  @override
   Future<MediaAttachment> completeUpload(int mediaId) async {
     completed = mediaId;
     return MediaAttachment.fromJson({

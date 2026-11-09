@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import '../formatting.dart';
 import '../models/media_attachment.dart';
+import '../sealed/local_media.dart';
 
 /// A video in a grid: its poster (or plain dark if it has none), a play
 /// button, and its length. Doesn't play; tapping it is the grid's job.
@@ -18,7 +19,9 @@ class VideoTile extends StatelessWidget {
       fit: StackFit.expand,
       children: [
         const ColoredBox(color: Colors.black87),
-        if (poster != null)
+        if (poster != null && localImage(poster) != null)
+          Image(image: localImage(poster)!, fit: BoxFit.cover, errorBuilder: (_, _, _) => const SizedBox.shrink())
+        else if (poster != null)
           CachedNetworkImage(
             imageUrl: poster.toString(),
             // By id, like MediaImage: the signed link changes on every load.
@@ -42,9 +45,9 @@ class PlayBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => DecoratedBox(
-        decoration: const BoxDecoration(color: Colors.black45, shape: BoxShape.circle),
-        child: Icon(Icons.play_arrow_rounded, color: Colors.white, size: size, semanticLabel: 'Play video'),
-      );
+    decoration: const BoxDecoration(color: Colors.black45, shape: BoxShape.circle),
+    child: Icon(Icons.play_arrow_rounded, color: Colors.white, size: size, semanticLabel: 'Play video'),
+  );
 }
 
 /// A video's length in the corner of its tile.
@@ -55,13 +58,13 @@ class DurationBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => DecoratedBox(
-        decoration: BoxDecoration(color: Colors.black54, borderRadius: BorderRadius.circular(4)),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
-          child: Text(
-            formatVideoDuration(milliseconds),
-            style: const TextStyle(color: Colors.white, fontSize: 12, fontFeatures: [FontFeature.tabularFigures()]),
-          ),
-        ),
-      );
+    decoration: BoxDecoration(color: Colors.black54, borderRadius: BorderRadius.circular(4)),
+    child: Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+      child: Text(
+        formatVideoDuration(milliseconds),
+        style: const TextStyle(color: Colors.white, fontSize: 12, fontFeatures: [FontFeature.tabularFigures()]),
+      ),
+    ),
+  );
 }
