@@ -45,7 +45,13 @@ Future<void> handlePushInBackground(RemoteMessage push) async {
     if (message != null) {
       title = '@${message['sender_username']}';
       final text = (message['body'] as String? ?? '').trim();
-      body = text.isNotEmpty ? text : '📷 Photo or video';
+      // End-to-end encrypted: the server's copy has no text. (Decrypting
+      // here, in the background, comes later.)
+      body = message['mode'] == 'e2e'
+          ? '🔒 New message'
+          : text.isNotEmpty
+              ? text
+              : '📷 Photo or video';
     }
   } on Object catch (e) {
     debugPrint('[push] couldn\'t fetch the message, showing a plain notification: $e');
