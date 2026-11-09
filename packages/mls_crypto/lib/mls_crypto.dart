@@ -17,7 +17,8 @@ import 'src/native/native_mls.dart' if (dart.library.js_interop) 'src/web/web_ml
 export 'src/mls_device.dart';
 
 /// Loads the library for this platform. Once, before anything else here.
-Future<void> initMlsCrypto() => platform.initPlatform();
+/// [libraryPath]: tests on a computer only (the built library's file).
+Future<void> initMlsCrypto({String? libraryPath}) => platform.initPlatform(libraryPath);
 
 /// A new device whose credential carries [identity] (e.g. "user:42/device:7").
 Future<MlsDevice> createMlsDevice(List<int> identity) => platform.createDevice(identity);

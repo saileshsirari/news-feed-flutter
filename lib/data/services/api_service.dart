@@ -103,6 +103,101 @@ class ApiService {
   Future<int> keyPackageCount(int deviceId) async =>
       _decodeObject(await _http.get(_uri('/e2e/key-packages/count', {'deviceId': deviceId})))['count'] as int;
 
+  /// One key package for each device of each of [userIds] (each handed out once).
+  Future<({List<({int userId, int deviceId, Uint8List keyPackage})> keyPackages, List<({int userId, int deviceId})> missing})>
+      claimKeyPackages(List<int> userIds) async {
+    final res = await _http.post(
+      _uri('/e2e/key-packages/claim'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'userIds': userIds}),
+    );
+    final json = _decodeObject(res);
+    return (
+      keyPackages: [
+        for (final p in json['keyPackages'] as List)
+          (
+            userId: (p as Map)['userId'] as int,
+            deviceId: p['deviceId'] as int,
+            keyPackage: base64Decode(p['keyPackage'] as String),
+          ),
+      ],
+      missing: [
+        for (final m in json['missing'] as List) (userId: (m as Map)['userId'] as int, deviceId: m['deviceId'] as int),
+      ],
+    );
+  }
+
+  /// Turns the chat end-to-end encrypted; returns the seq of its notice
+  /// (this device reads the chat from there). 409 if it already was.
+  Future<int> turnOnE2e(
+    int conversationId, {
+    required int deviceId,
+    required String groupId,
+    required int epoch,
+    required Uint8List welcome,
+    required List<({int userId, int deviceId})> recipients,
+  }) async {
+    final res = await _http.post(
+      _uri('/conversations/$conversationId/e2e'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({
+        'deviceId': deviceId,
+        'groupId': groupId,
+        'epoch': epoch,
+        'welcome': base64Encode(welcome),
+        'recipients': [for (final r in recipients) {'userId': r.userId, 'deviceId': r.deviceId}],
+      }),
+    );
+    return _decodeObject(res)['seq'] as int;
+  }
+
+  /// Encrypted chats this device was added to, waiting to be joined.
+  Future<List<({int id, int conversationId, Uint8List welcome, int afterSeq, String groupId})>> e2eWelcomes(
+    int deviceId,
+  ) async {
+    final res = await _http.get(_uri('/e2e/welcomes', {'deviceId': deviceId}));
+    return [
+      for (final w in _decodeList(res))
+        (
+          id: (w as Map)['id'] as int,
+          conversationId: w['conversation_id'] as int,
+          welcome: base64Decode(w['welcome'] as String),
+          afterSeq: w['after_seq'] as int,
+          groupId: w['mls_group_id'] as String,
+        ),
+    ];
+  }
+
+  Future<void> doneWithWelcome(int deviceId, int welcomeId) async {
+    final res = await _http.delete(_uri('/e2e/welcomes/$welcomeId', {'deviceId': deviceId}));
+    if (res.statusCode >= 400 && res.statusCode != 404) throw ApiException(res.statusCode, res.body);
+  }
+
+  /// An encrypted message (or group change) from this device; returns the
+  /// server's message (its id and seq). 409 with currentEpoch if the group
+  /// moved on.
+  Future<Map<String, dynamic>> sendEncrypted(
+    int conversationId, {
+    required int deviceId,
+    required Uint8List ciphertext,
+    required int epoch,
+    bool changesGroup = false,
+    String? clientMessageId,
+  }) async {
+    final res = await _http.post(
+      _uri('/conversations/$conversationId/messages/encrypted'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({
+        'deviceId': deviceId,
+        'ciphertext': base64Encode(ciphertext),
+        'epoch': epoch,
+        if (changesGroup) 'changesGroup': true,
+        'clientMessageId': ?clientMessageId,
+      }),
+    );
+    return _decodeObject(res);
+  }
+
   /// Registers this install (or refreshes it) for the signed-in user;
   /// returns its id on the server (push addresses are stored against it).
   Future<int> registerDevice(String installId, {required String name, required String platform}) async {

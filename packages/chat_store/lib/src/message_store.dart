@@ -12,9 +12,15 @@ class RemoteMessage {
     required this.body,
     required this.createdAt,
     required this.json,
+    this.overwrite = true,
   });
 
   final int conversationId;
+
+  /// False: only store it if this device doesn't have it yet. For a copy
+  /// that must never replace what's there, like an end-to-end encrypted
+  /// message's ciphertext over the text this device already decrypted.
+  final bool overwrite;
   final int seq;
   final int messageId;
   final String body;
@@ -50,19 +56,18 @@ class MessageStore {
   Future<void> upsertAll(List<RemoteMessage> messages) async {
     if (messages.isEmpty) return;
     final now = _now().millisecondsSinceEpoch;
+    ChatMessagesCompanion row(RemoteMessage m) => ChatMessagesCompanion.insert(
+          conversationId: m.conversationId,
+          seq: m.seq,
+          messageId: m.messageId,
+          body: m.body,
+          createdAt: m.createdAt,
+          json: m.json,
+          fetchedAt: now,
+        );
     await db.batch((batch) {
-      batch.insertAllOnConflictUpdate(db.chatMessages, [
-        for (final m in messages)
-          ChatMessagesCompanion.insert(
-            conversationId: m.conversationId,
-            seq: m.seq,
-            messageId: m.messageId,
-            body: m.body,
-            createdAt: m.createdAt,
-            json: m.json,
-            fetchedAt: now,
-          ),
-      ]);
+      batch.insertAllOnConflictUpdate(db.chatMessages, [for (final m in messages) if (m.overwrite) row(m)]);
+      batch.insertAll(db.chatMessages, [for (final m in messages) if (!m.overwrite) row(m)], mode: InsertMode.insertOrIgnore);
     });
   }
 

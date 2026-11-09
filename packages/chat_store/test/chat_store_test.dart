@@ -232,6 +232,15 @@ void main() {
     await store.updateJson(1, 9999, '{}'); // not here: nothing happens
   });
 
+  test('a copy that mustn\'t overwrite is stored only where nothing is yet', () async {
+    RemoteMessage m(int seq, String body, {bool overwrite = true}) => RemoteMessage(
+          conversationId: 1, seq: seq, messageId: seq, body: body, createdAt: seq, json: '{}', overwrite: overwrite);
+    await store.upsertAll([m(1, 'decrypted text')]);
+    await store.upsertAll([m(1, 'ciphertext placeholder', overwrite: false), m(2, 'placeholder', overwrite: false)]);
+    final rows = await store.watchFrom(1, 0).first;
+    expect(rows.map((r) => r.body), ['decrypted text', 'placeholder']);
+  });
+
   test('keeps named values for the device, and clear forgets them too', () async {
     expect(await store.blob('e2e'), isNull);
     await store.putBlob('e2e', Uint8List.fromList([1, 2, 3]));

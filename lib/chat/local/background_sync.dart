@@ -8,6 +8,7 @@ import '../../data/services/api_service.dart';
 import '../../data/services/service_providers.dart';
 import '../../data/services/socket_provider.dart';
 import '../../session/current_user_provider.dart';
+import '../../e2e/e2e_chats.dart';
 import '../reactions.dart';
 import 'local_chat.dart';
 
@@ -26,6 +27,7 @@ class ChatBackgroundSync {
     required this.sync,
     required this.store,
     required Stream<Map<String, dynamic>> events,
+    this.e2e,
   }) {
     _events = events.listen(_onEvent);
     unawaited(catchUpAll());
@@ -35,6 +37,9 @@ class ChatBackgroundSync {
   final ApiService api;
   final ChatSync sync;
   final MessageStore store;
+
+  /// Encrypted chats (null in tests that don't need them).
+  final E2eChats? e2e;
   late final StreamSubscription<Map<String, dynamic>> _events;
 
   /// The newest message id already reported per conversation, so the same
@@ -61,13 +66,17 @@ class ChatBackgroundSync {
         final messageId = event['messageId'];
         final userId = event['userId'];
         if (conversationId is! int || messageId is! int || userId is! int) return;
-        unawaited(_guard(() => applyReaction(
+        unawaited(
+          _guard(
+            () => applyReaction(
               store,
               conversationId: conversationId,
               messageId: messageId,
               userId: userId,
               emoji: event['emoji'] as String?,
-            )));
+            ),
+          ),
+        );
       case 'reconnected':
         unawaited(catchUpAll());
     }
@@ -116,6 +125,7 @@ final chatBackgroundSyncProvider = Provider.autoDispose<ChatBackgroundSync?>((re
     sync: ref.watch(chatSyncProvider(userId)),
     store: ref.watch(messageStoreProvider(userId)),
     events: ref.watch(socketProvider(userId)).events,
+    e2e: ref.watch(e2eChatsProvider(userId)),
   );
   ref.onDispose(background.dispose);
   return background;

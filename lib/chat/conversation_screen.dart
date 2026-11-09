@@ -89,11 +89,32 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(widget.title),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (vm.isE2e)
+                  const Padding(
+                    padding: EdgeInsets.only(right: 4),
+                    child: Icon(Icons.lock, size: 16, semanticLabel: 'End-to-end encrypted'),
+                  ),
+                Flexible(child: Text(widget.title, overflow: TextOverflow.ellipsis)),
+              ],
+            ),
             if (widget.otherUserId != null) PresenceSubtitle(userId: widget.otherUserId!),
           ],
         ),
         actions: [
+          if (!vm.isE2e && !vm.isGroup)
+            PopupMenuButton<String>(
+              key: const Key('chat-menu'),
+              onSelected: (_) => _confirmTurnOnEncryption(),
+              itemBuilder: (_) => const [
+                PopupMenuItem(
+                  value: 'e2e',
+                  child: ListTile(leading: Icon(Icons.lock_outline), title: Text('Turn on end-to-end encryption')),
+                ),
+              ],
+            ),
           IconButton(
             icon: const Icon(Icons.call),
             tooltip: 'Start call',
@@ -111,6 +132,15 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
             Padding(
               padding: const EdgeInsets.all(8),
               child: Text(vm.error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
+            ),
+          if (vm.isE2e && !vm.canReadE2e)
+            MaterialBanner(
+              leading: const Icon(Icons.lock_outline),
+              content: const Text(
+                'This chat is end-to-end encrypted, and this device isn\'t in it: messages can only be read '
+                'on devices that were signed in when encryption was turned on.',
+              ),
+              actions: [const SizedBox.shrink()],
             ),
           Expanded(
             child: vm.isLoading
@@ -194,7 +224,8 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
                     ),
                   Row(
                     children: [
-                      AddMediaButton(draftKey: _draftKey),
+                      // Encrypted photos and videos come later (E2E step 7).
+                      if (!vm.isE2e) AddMediaButton(draftKey: _draftKey),
                       IconButton(
                         tooltip: 'Emoji',
                         icon: const Icon(Icons.emoji_emotions_outlined),
@@ -225,6 +256,31 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
 
   /// After the frame, so the list has laid out the new message and
   /// maxScrollExtent includes it.
+  Future<void> _confirmTurnOnEncryption() async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        icon: const Icon(Icons.lock_outline),
+        title: const Text('Turn on end-to-end encryption?'),
+        content: const Text(
+          'Messages from now on can only be read on your devices and theirs: not by the server. '
+          'This can\'t be turned off later.\n\n'
+          'Earlier messages stay as they are. Photos and videos can\'t be sent in encrypted chats yet.',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.of(context).pop(true), child: const Text('Turn on')),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    try {
+      await ref.read(conversationProvider(widget.conversationId).notifier).turnOnEncryption();
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+    }
+  }
+
   void _scrollToBottom({required bool animate}) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!_scrollController.hasClients) return;
@@ -268,6 +324,17 @@ class _MessageBubble extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    if (message.isNotice) {
+      // About the chat itself ("🔒 End-to-end encryption turned on").
+      return Center(
+        child: Container(
+          margin: const EdgeInsets.symmetric(vertical: 8),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          decoration: BoxDecoration(color: colorScheme.secondaryContainer, borderRadius: BorderRadius.circular(12)),
+          child: Text(message.body, style: Theme.of(context).textTheme.labelMedium),
+        ),
+      );
+    }
     final time = TimeOfDay.fromDateTime(DateTime.fromMillisecondsSinceEpoch(message.createdAt)).format(context);
     return Column(
       crossAxisAlignment: isMine ? CrossAxisAlignment.end : CrossAxisAlignment.start,
@@ -298,6 +365,11 @@ class _MessageBubble extends StatelessWidget {
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
+                      if (message.isE2e)
+                        Padding(
+                          padding: const EdgeInsets.only(right: 3),
+                          child: Icon(Icons.lock, size: 11, color: colorScheme.onSurfaceVariant),
+                        ),
                       Text(
                         time,
                         style: Theme.of(context).textTheme.labelSmall?.copyWith(color: colorScheme.onSurfaceVariant),
@@ -310,8 +382,7 @@ class _MessageBubble extends StatelessWidget {
             ),
           ),
         ),
-        if (reactions != null)
-          Padding(padding: const EdgeInsets.only(bottom: 4), child: reactions),
+        if (reactions != null) Padding(padding: const EdgeInsets.only(bottom: 4), child: reactions),
       ],
     );
   }

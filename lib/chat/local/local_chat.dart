@@ -11,14 +11,39 @@ import '../../models/models.dart';
 /// how a stored message becomes a ChatMessage again (its JSON).
 
 /// The server's message JSON as chat_store keeps it.
-RemoteMessage remoteMessageFrom(Map<String, dynamic> json) => RemoteMessage(
-  conversationId: json['conversation_id'] as int,
-  seq: json['seq'] as int,
-  messageId: json['id'] as int,
-  body: json['body'] as String,
-  createdAt: json['created_at'] as int,
-  json: jsonEncode(json),
-);
+///
+/// An end-to-end encrypted message (or group change) arriving this way
+/// (newest page, scrolling back) is stored as a placeholder that never
+/// replaces what's there: only the encryption engine (lib/e2e/e2e_chats.dart)
+/// decrypts, strictly in order, and its text must never be overwritten by
+/// the ciphertext (it can't be decrypted a second time).
+RemoteMessage remoteMessageFrom(Map<String, dynamic> json) {
+  final mode = json['mode'] as String?;
+  if (mode == 'e2e' || mode == 'commit') {
+    final placeholder = {...json, 'ciphertext': null, 'body': mode == 'e2e' ? encryptedPlaceholder : ''};
+    return RemoteMessage(
+      conversationId: json['conversation_id'] as int,
+      seq: json['seq'] as int,
+      messageId: json['id'] as int,
+      body: '', // nothing searchable until decrypted
+      createdAt: json['created_at'] as int,
+      json: jsonEncode(placeholder),
+      overwrite: false,
+    );
+  }
+  return RemoteMessage(
+    conversationId: json['conversation_id'] as int,
+    seq: json['seq'] as int,
+    messageId: json['id'] as int,
+    body: json['body'] as String,
+    createdAt: json['created_at'] as int,
+    json: jsonEncode(json),
+  );
+}
+
+/// Shown for an encrypted message this device hasn't decrypted (yet, or
+/// ever: one sent before this device joined the chat).
+const encryptedPlaceholder = '🔒 Encrypted message';
 
 ChatMessage chatMessageFrom(StoredMessage stored) =>
     ChatMessage.fromJson(jsonDecode(stored.json) as Map<String, dynamic>);

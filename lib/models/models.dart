@@ -180,6 +180,10 @@ class ConversationSummary {
   final int lastSeq;
   final int unreadCount;
 
+  /// End-to-end encrypted (for good), and its MLS group.
+  final bool isE2e;
+  final String? mlsGroupId;
+
   ConversationSummary({
     required this.id,
     required this.isGroup,
@@ -190,6 +194,8 @@ class ConversationSummary {
     this.lastMessageCreatedAt,
     this.lastSeq = 0,
     required this.unreadCount,
+    this.isE2e = false,
+    this.mlsGroupId,
   });
 
   /// What to show as this row's title — a group's name, or "@" + the other
@@ -207,6 +213,8 @@ class ConversationSummary {
         lastMessageCreatedAt: json['last_message_created_at'] as int?,
         lastSeq: json['last_seq'] as int? ?? 0,
         unreadCount: json['unread_count'] as int,
+        isE2e: json['encryption'] == 'e2e',
+        mlsGroupId: json['mls_group_id'] as String?,
       );
 }
 
@@ -230,6 +238,21 @@ class ChatMessage {
   /// Emoji reactions, grouped by emoji, oldest group first.
   final List<MessageReaction> reactions;
 
+  /// server, e2e (end-to-end encrypted), commit (an encrypted group change:
+  /// nothing to show) or notice (about the chat itself).
+  final String mode;
+
+  /// Which of the sender's devices sent it.
+  final int? senderDeviceId;
+
+  bool get isE2e => mode == 'e2e';
+  bool get isNotice => mode == 'notice';
+  bool get isGroupChange => mode == 'commit';
+
+  /// An encrypted message this device has the text of. (Until then, [body]
+  /// is a placeholder.)
+  bool get isDecrypted => json['decrypted'] == true;
+
   ChatMessage({
     required this.id,
     required this.conversationId,
@@ -241,6 +264,8 @@ class ChatMessage {
     this.media = const [],
     this.json = const {},
     this.reactions = const [],
+    this.mode = 'server',
+    this.senderDeviceId,
   });
 
   factory ChatMessage.fromJson(Map<String, dynamic> json) => ChatMessage(
@@ -248,6 +273,8 @@ class ChatMessage {
         conversationId: json['conversation_id'] as int,
         seq: json['seq'] as int? ?? 0,
         json: json,
+        mode: json['mode'] as String? ?? 'server',
+        senderDeviceId: json['sender_device_id'] as int?,
         reactions: [
           for (final r in json['reactions'] as List? ?? const []) MessageReaction.fromJson(r as Map<String, dynamic>),
         ],

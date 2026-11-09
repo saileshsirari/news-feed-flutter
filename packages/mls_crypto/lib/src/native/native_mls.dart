@@ -2,10 +2,15 @@ import 'dart:typed_data';
 
 import '../mls_device.dart';
 import '../rust/api/device.dart' as rust;
+import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart' show ExternalLibrary;
+
 import '../rust/frb_generated.dart';
 
 /// Phones and desktops: the Rust library through flutter_rust_bridge.
-Future<void> initPlatform() => RustLib.init();
+/// [libraryPath] is for tests on a computer, which load the library built
+/// in rust/target/release instead of the app's bundled one.
+Future<void> initPlatform([String? libraryPath]) =>
+    RustLib.init(externalLibrary: libraryPath == null ? null : ExternalLibrary.open(libraryPath));
 
 Future<MlsDevice> createDevice(List<int> identity) async =>
     _NativeDevice(await _guard(() => rust.MlsDevice.newInstance(identity: identity)));

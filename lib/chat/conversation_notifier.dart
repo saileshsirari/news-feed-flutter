@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:chat_store/chat_store.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../data/services/service_providers.dart';
@@ -8,6 +9,7 @@ import '../data/services/socket_provider.dart';
 import '../models/models.dart';
 
 import '../session/current_user_provider.dart';
+import '../e2e/e2e_chats.dart';
 import 'chat_outbox.dart';
 import 'local/local_chat.dart';
 import 'message_sender.dart';
@@ -38,6 +40,9 @@ class ConversationState {
     this.usernameByUserId = const {},
     this.isLoadingOlder = false,
     this.reachedStart = false,
+    this.isE2e = false,
+    this.canReadE2e = false,
+    this.isGroup = false,
   });
 
   final bool isLoading;
@@ -52,6 +57,13 @@ class ConversationState {
 
   /// [messages] go back to the conversation's first message.
   final bool reachedStart;
+
+  /// End-to-end encrypted (for good).
+  final bool isE2e;
+
+  /// This device is in the chat's encrypted group (can read and send).
+  final bool canReadE2e;
+  final bool isGroup;
 
   /// Every participant's read pointer, keyed by userId — the "seen" tick's
   /// data source. Populated once on open (_loadReadStates) and kept current
@@ -97,6 +109,9 @@ class ConversationState {
     Map<int, String>? usernameByUserId,
     bool? isLoadingOlder,
     bool? reachedStart,
+    bool? isE2e,
+    bool? canReadE2e,
+    bool? isGroup,
   }) {
     return ConversationState(
       isLoading: isLoading ?? this.isLoading,
@@ -108,6 +123,9 @@ class ConversationState {
       usernameByUserId: usernameByUserId ?? this.usernameByUserId,
       isLoadingOlder: isLoadingOlder ?? this.isLoadingOlder,
       reachedStart: reachedStart ?? this.reachedStart,
+      isE2e: isE2e ?? this.isE2e,
+      canReadE2e: canReadE2e ?? this.canReadE2e,
+      isGroup: isGroup ?? this.isGroup,
     );
   }
 
@@ -183,6 +201,7 @@ class ConversationNotifier extends Notifier<ConversationState> {
     // which time build() has returned this starting value.
     _syncLatest();
     _loadReadStates();
+    _loadEncryption();
     return const ConversationState();
   }
 
@@ -192,7 +211,8 @@ class ConversationNotifier extends Notifier<ConversationState> {
     _messagesSub?.cancel();
     _messagesSub = _store.watchFrom(conversationId, from).listen((rows) {
       if (!ref.mounted) return;
-      final messages = [for (final row in rows) chatMessageFrom(row)];
+      // Group changes (MLS commits) are bookkeeping, not messages.
+      final messages = [for (final row in rows) chatMessageFrom(row)]..removeWhere((m) => m.isGroupChange);
       state = state.copyWith(messages: messages, isLoading: state.isLoading && messages.isEmpty);
       _markReadIfNewer();
     });
@@ -214,6 +234,44 @@ class ConversationNotifier extends Notifier<ConversationState> {
       // Offline with history on the device: just show that.
       state = state.copyWith(isLoading: false, error: state.messages.isEmpty ? 'Couldn\'t load messages: $e' : null);
     }
+  }
+
+  E2eChats get _e2e => ref.read(e2eChatsProvider(_currentUserId));
+
+  /// Whether this chat is end-to-end encrypted, and if so, gets this device
+  /// into it (from a waiting welcome) and reads it in order.
+  Future<void> _loadEncryption() async {
+    try {
+      final summary = (await ref.read(apiServiceProvider).listConversations(_currentUserId))
+          .where((c) => c.id == conversationId)
+          .firstOrNull;
+      if (summary == null || !ref.mounted) return;
+      _summary = summary;
+      state = state.copyWith(isE2e: summary.isE2e, isGroup: summary.isGroup);
+      if (!summary.isE2e) return;
+      if (!await _e2e.canRead(conversationId)) await _e2e.joinWelcomes();
+      final canRead = await _e2e.canRead(conversationId);
+      if (!ref.mounted) return;
+      state = state.copyWith(canReadE2e: canRead);
+      if (canRead) await _e2e.sync(conversationId);
+    } catch (e) {
+      debugPrint('[e2e] chat $conversationId: $e');
+    }
+  }
+
+  ConversationSummary? _summary;
+
+  /// Turns this 1:1 chat end-to-end encrypted, for good. Throws with a
+  /// message for the user if it can't be done.
+  Future<void> turnOnEncryption() async {
+    final summary = _summary;
+    if (summary == null || summary.isGroup || summary.otherUserId == null) {
+      throw const E2eUnavailable('End-to-end encryption is for one-to-one chats for now.');
+    }
+    await _e2e.turnOn(summary, [_currentUserId, summary.otherUserId!]);
+    if (!ref.mounted) return;
+    state = state.copyWith(isE2e: true, canReadE2e: true);
+    await _e2e.sync(conversationId);
   }
 
   /// The page above the oldest message shown (you scrolled to the top).
@@ -239,11 +297,18 @@ class ConversationNotifier extends Notifier<ConversationState> {
       return;
     }
     if (event['conversationId'] != conversationId) return;
+    if (event['type'] == 'e2e_turned_on') {
+      _loadEncryption();
+      return;
+    }
     if (event['type'] == 'message_created') {
       // The event carries the seq: fetch only what's missing up to it.
       final seq = event['seq'];
       if (seq is int) {
-        _sync.onNewMessage(conversationId, seq).catchError((Object _) {});
+        _sync
+            .onNewMessage(conversationId, seq)
+            .then((_) => state.isE2e ? _e2e.sync(conversationId) : null)
+            .catchError((Object _) {});
       } else {
         _syncLatest();
       }
@@ -307,13 +372,8 @@ class ConversationNotifier extends Notifier<ConversationState> {
     }
   }
 
-  Future<void> _setReaction(int messageId, String? emoji) => applyReaction(
-        _store,
-        conversationId: conversationId,
-        messageId: messageId,
-        userId: _currentUserId,
-        emoji: emoji,
-      );
+  Future<void> _setReaction(int messageId, String? emoji) =>
+      applyReaction(_store, conversationId: conversationId, messageId: messageId, userId: _currentUserId, emoji: emoji);
 
   /// Sends text right away (retrying once on a dropped connection, see
   /// sendWithOneRetry). Messages with photos or videos go through
@@ -322,6 +382,15 @@ class ConversationNotifier extends Notifier<ConversationState> {
     final trimmed = body.trim();
     if (trimmed.isEmpty) return;
     state = state.copyWith(isSending: true);
+    if (state.isE2e) {
+      try {
+        await _e2e.send(conversationId, trimmed, clientMessageId: newClientMessageId(_currentUserId));
+        if (ref.mounted) state = state.copyWith(isSending: false);
+      } catch (e) {
+        if (ref.mounted) state = state.copyWith(isSending: false, error: 'Couldn\'t send: $e');
+      }
+      return;
+    }
     try {
       final message = await sendWithOneRetry(
         ref.read(apiServiceProvider),

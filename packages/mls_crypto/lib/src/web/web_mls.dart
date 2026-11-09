@@ -10,7 +10,7 @@ import '../mls_device.dart';
 /// page's own thread, and no cross-origin isolation is needed.
 _Module? _module;
 
-Future<void> initPlatform() async {
+Future<void> initPlatform([String? libraryPath]) async {
   final url = Uri.base.resolve('mls/mls_crypto_web.js').toString();
   final module = (await importModule(url.toJS).toDart) as _Module;
   final wasm = Uri.base.resolve('mls/mls_crypto_web_bg.wasm').toString();
