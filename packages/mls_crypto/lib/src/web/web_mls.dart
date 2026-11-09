@@ -24,6 +24,12 @@ Future<MlsDevice> createDevice(List<int> identity) async {
   return _WebDevice(_guard(() => module.webMlsDevice.callAsConstructor<_Device>(_bytes(identity))));
 }
 
+Future<MlsDevice> restoreDevice(List<int> sealed, List<int> key) async {
+  final module = _module;
+  if (module == null) throw const MlsException('call initMlsCrypto() first');
+  return _WebDevice(_guard(() => module.webMlsDevice.restore(_bytes(sealed), _bytes(key))));
+}
+
 JSUint8Array _bytes(List<int> bytes) => (bytes is Uint8List ? bytes : Uint8List.fromList(bytes)).toJS;
 
 /// A Rust error arrives as a JavaScript Error.
@@ -38,6 +44,12 @@ T _guard<T>(T Function() call) {
 class _WebDevice implements MlsDevice {
   _WebDevice(this._device);
   final _Device _device;
+
+  @override
+  Future<Uint8List> identity() async => _guard(() => _device.identity().toDart);
+
+  @override
+  Future<Uint8List> snapshot(List<int> key) async => _guard(() => _device.snapshot(_bytes(key)).toDart);
 
   @override
   Future<Uint8List> keyPackage() async => _guard(() => _device.keyPackage().toDart);
@@ -80,10 +92,17 @@ extension type _Module(JSObject _) implements JSObject {
   @JS('default')
   external JSPromise<JSAny?> init(_InitOptions options);
   @JS('WebMlsDevice')
-  external JSFunction get webMlsDevice;
+  external _DeviceClass get webMlsDevice;
+}
+
+/// The WebMlsDevice class itself: its constructor, and static restore().
+extension type _DeviceClass(JSFunction _) implements JSFunction {
+  external _Device restore(JSUint8Array sealed, JSUint8Array key);
 }
 
 extension type _Device(JSObject _) implements JSObject {
+  external JSUint8Array identity();
+  external JSUint8Array snapshot(JSUint8Array key);
   external JSUint8Array keyPackage();
   external void createGroup(JSUint8Array groupId);
   external _Invitation addMember(JSUint8Array groupId, JSUint8Array keyPackage);

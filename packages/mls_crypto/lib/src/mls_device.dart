@@ -4,6 +4,14 @@ import 'dart:typed_data';
 /// leave the native or WebAssembly side) and the MLS groups it's in, one
 /// per encrypted conversation. Bytes in, bytes out.
 abstract interface class MlsDevice {
+  /// The identity this device registered with (e.g. "user:42/device:7").
+  Future<Uint8List> identity();
+
+  /// Everything this device knows (keys, unused key packages, every group),
+  /// sealed with AES-256-GCM under [key] (32 random bytes kept in the
+  /// platform's secure storage). Save it after every change.
+  Future<Uint8List> snapshot(List<int> key);
+
   /// A one-time "key package": what someone needs to add this device to a
   /// group. Public; uploaded to the server for others to fetch.
   Future<Uint8List> keyPackage();

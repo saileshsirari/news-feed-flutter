@@ -1,8 +1,11 @@
 use std::collections::HashMap;
 
+use aes_gcm::aead::{Aead, KeyInit, Payload};
+use aes_gcm::{Aes256Gcm, Nonce};
 use openmls::prelude::{tls_codec::*, *};
 use openmls_basic_credential::SignatureKeyPair;
 use openmls_rust_crypto::OpenMlsRustCrypto;
+use openmls_traits::OpenMlsProvider;
 
 /// One suite for every group: X25519 key exchange, AES-128-GCM, SHA-256,
 /// Ed25519 signatures. MLS's mandatory-to-implement suite, so any other
@@ -55,14 +58,58 @@ impl Received {
 /// local store) is the next step.
 pub struct MlsDevice {
     provider: OpenMlsRustCrypto,
+    identity: Vec<u8>,
     signer: SignatureKeyPair,
     credential: CredentialWithKey,
     groups: HashMap<Vec<u8>, MlsGroup>,
 }
 
+/// The saved form of a device: "MLS1", then the identity, the signing key's
+/// public half, the group ids, and every entry of OpenMLS's storage (which
+/// holds all keys and group state). Then sealed (see [MlsDevice::snapshot]).
+const SNAPSHOT_FORMAT: &[u8; 4] = b"MLS1";
+/// Marks a sealed snapshot (and is authenticated with it).
+const SEALED_FORMAT: &[u8; 4] = b"MLSS";
+
+fn put_bytes(out: &mut Vec<u8>, bytes: &[u8]) {
+    out.extend_from_slice(&(bytes.len() as u32).to_be_bytes());
+    out.extend_from_slice(bytes);
+}
+
+/// Reads what [put_bytes] wrote.
+struct Reader<'a>(&'a [u8]);
+
+impl<'a> Reader<'a> {
+    fn take(&mut self, n: usize) -> Result<&'a [u8], MlsError> {
+        if self.0.len() < n {
+            return Err(MlsError("saved state is cut short".into()));
+        }
+        let (head, rest) = self.0.split_at(n);
+        self.0 = rest;
+        Ok(head)
+    }
+
+    fn u32(&mut self) -> Result<usize, MlsError> {
+        Ok(u32::from_be_bytes(self.take(4)?.try_into().unwrap()) as usize)
+    }
+
+    fn bytes(&mut self) -> Result<Vec<u8>, MlsError> {
+        let n = self.u32()?;
+        Ok(self.take(n)?.to_vec())
+    }
+}
+
+fn cipher(key: &[u8]) -> Result<Aes256Gcm, MlsError> {
+    if key.len() != 32 {
+        return Err(MlsError("the state key must be 32 bytes".into()));
+    }
+    Aes256Gcm::new_from_slice(key).map_err(|e| err("state key", e))
+}
+
 impl MlsDevice {
     /// A new device whose credential carries [identity] (e.g. "user:42/device:7").
     pub fn new(identity: Vec<u8>) -> Result<MlsDevice, MlsError> {
+        let identity_for_device = identity.clone();
         let provider = OpenMlsRustCrypto::default();
         let signer = SignatureKeyPair::new(CIPHERSUITE.signature_algorithm()).map_err(|e| err("signature keys", e))?;
         signer.store(provider.storage()).map_err(|e| err("storing signature keys", e))?;
@@ -70,7 +117,87 @@ impl MlsDevice {
             credential: BasicCredential::new(identity).into(),
             signature_key: signer.to_public_vec().into(),
         };
-        Ok(MlsDevice { provider, signer, credential, groups: HashMap::new() })
+        let identity = identity_for_device;
+        Ok(MlsDevice { provider, identity, signer, credential, groups: HashMap::new() })
+    }
+
+    /// Everything this device knows (its keys, unused key packages, every
+    /// group's state), sealed with AES-256-GCM under [key] (32 random bytes
+    /// the app keeps in the platform's secure storage). Save it after every
+    /// change: a device that loses it loses its encrypted chats.
+    pub fn snapshot(&self, key: Vec<u8>) -> Result<Vec<u8>, MlsError> {
+        let mut plain = SNAPSHOT_FORMAT.to_vec();
+        put_bytes(&mut plain, &self.identity);
+        put_bytes(&mut plain, self.signer.public());
+        plain.extend_from_slice(&(self.groups.len() as u32).to_be_bytes());
+        for group_id in self.groups.keys() {
+            put_bytes(&mut plain, group_id);
+        }
+        let values = self.provider.storage().values.read().map_err(|_| MlsError("storage is locked".into()))?;
+        plain.extend_from_slice(&(values.len() as u32).to_be_bytes());
+        for (k, v) in values.iter() {
+            put_bytes(&mut plain, k);
+            put_bytes(&mut plain, v);
+        }
+        drop(values);
+
+        let mut nonce = [0u8; 12];
+        getrandom::getrandom(&mut nonce).map_err(|e| err("randomness", e))?;
+        let sealed = cipher(&key)?
+            .encrypt(Nonce::from_slice(&nonce), Payload { msg: &plain, aad: SEALED_FORMAT })
+            .map_err(|_| MlsError("couldn't seal the state".into()))?;
+        let mut out = SEALED_FORMAT.to_vec();
+        out.extend_from_slice(&nonce);
+        out.extend_from_slice(&sealed);
+        Ok(out)
+    }
+
+    /// The device [snapshot] saved. Fails, without revealing anything, if
+    /// the key is wrong or the bytes were changed.
+    pub fn restore(sealed: Vec<u8>, key: Vec<u8>) -> Result<MlsDevice, MlsError> {
+        if sealed.len() < 16 || &sealed[..4] != SEALED_FORMAT {
+            return Err(MlsError("not a saved device state".into()));
+        }
+        let plain = cipher(&key)?
+            .decrypt(Nonce::from_slice(&sealed[4..16]), Payload { msg: &sealed[16..], aad: SEALED_FORMAT })
+            .map_err(|_| MlsError("wrong key, or the saved state was changed".into()))?;
+
+        let mut r = Reader(&plain);
+        if r.take(4)? != SNAPSHOT_FORMAT {
+            return Err(MlsError("unknown saved state format".into()));
+        }
+        let identity = r.bytes()?;
+        let public_key = r.bytes()?;
+        let group_ids = (0..r.u32()?).map(|_| r.bytes()).collect::<Result<Vec<_>, _>>()?;
+        let provider = OpenMlsRustCrypto::default();
+        {
+            let mut values = provider.storage().values.write().map_err(|_| MlsError("storage is locked".into()))?;
+            for _ in 0..r.u32()? {
+                let k = r.bytes()?;
+                let v = r.bytes()?;
+                values.insert(k, v);
+            }
+        }
+
+        let signer = SignatureKeyPair::read(provider.storage(), &public_key, CIPHERSUITE.signature_algorithm())
+            .ok_or_else(|| MlsError("saved state has no signing key".into()))?;
+        let credential = CredentialWithKey {
+            credential: BasicCredential::new(identity.clone()).into(),
+            signature_key: signer.to_public_vec().into(),
+        };
+        let mut groups = HashMap::new();
+        for id in group_ids {
+            let group = MlsGroup::load(provider.storage(), &GroupId::from_slice(&id))
+                .map_err(|e| err("loading group", e))?
+                .ok_or_else(|| MlsError("saved state is missing a group".into()))?;
+            groups.insert(id, group);
+        }
+        Ok(MlsDevice { provider, identity, signer, credential, groups })
+    }
+
+    /// The identity this device registered with.
+    pub fn identity(&self) -> Vec<u8> {
+        self.identity.clone()
     }
 
     /// A one-time "key package": what someone needs to add this device to a

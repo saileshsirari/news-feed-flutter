@@ -22,6 +22,10 @@ Future<void> initMlsCrypto() => platform.initPlatform();
 /// A new device whose credential carries [identity] (e.g. "user:42/device:7").
 Future<MlsDevice> createMlsDevice(List<int> identity) => platform.createDevice(identity);
 
+/// The device [MlsDevice.snapshot] saved; throws [MlsException] if [key] is
+/// wrong or the bytes were changed.
+Future<MlsDevice> restoreMlsDevice(List<int> sealed, List<int> key) => platform.restoreDevice(sealed, key);
+
 /// Two throwaway devices exchange an encrypted message: "OK (…)" if this
 /// platform's build works, or what went wrong. For debug builds and checks.
 Future<String> mlsSelfTest() async {

@@ -26,6 +26,21 @@ void main() {
     expect((await alice.members(group)).map(utf8.decode).toSet(), {'alice', 'bob'});
   });
 
+  test('a device saved and restored carries on in its chats', () async {
+    final key = List<int>.filled(32, 9);
+    final alice = await createMlsDevice(utf8.encode('alice'));
+    var bob = await createMlsDevice(utf8.encode('bob'));
+    await alice.createGroup(group);
+    await bob.join((await alice.addMember(group, await bob.keyPackage())).welcome);
+
+    bob = await restoreMlsDevice(await bob.snapshot(key), key);
+    expect(utf8.decode(await bob.identity()), 'bob');
+    final received = await bob.receive(group, await alice.encrypt(group, utf8.encode('still here?')));
+    expect(utf8.decode(received.plaintext!), 'still here?');
+
+    await expectLater(restoreMlsDevice(await bob.snapshot(key), List.filled(32, 1)), throwsA(isA<MlsException>()));
+  });
+
   test('the self-test passes on this platform', () async {
     expect(await mlsSelfTest(), startsWith('OK'));
   });

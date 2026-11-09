@@ -10,6 +10,9 @@ Future<void> initPlatform() => RustLib.init();
 Future<MlsDevice> createDevice(List<int> identity) async =>
     _NativeDevice(await _guard(() => rust.MlsDevice.newInstance(identity: identity)));
 
+Future<MlsDevice> restoreDevice(List<int> sealed, List<int> key) async =>
+    _NativeDevice(await _guard(() => rust.MlsDevice.restore(sealed: sealed, key: key)));
+
 Future<T> _guard<T>(Future<T> Function() call) async {
   try {
     return await call();
@@ -21,6 +24,12 @@ Future<T> _guard<T>(Future<T> Function() call) async {
 class _NativeDevice implements MlsDevice {
   _NativeDevice(this._device);
   final rust.MlsDevice _device;
+
+  @override
+  Future<Uint8List> identity() => _guard(_device.identity);
+
+  @override
+  Future<Uint8List> snapshot(List<int> key) => _guard(() => _device.snapshot(key: key));
 
   @override
   Future<Uint8List> keyPackage() => _guard(_device.keyPackage);

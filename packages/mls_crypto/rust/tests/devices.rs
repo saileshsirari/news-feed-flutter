@@ -88,3 +88,52 @@ fn bad_input_is_an_error_not_a_crash() {
     assert!(alice.join(b"garbage".to_vec()).is_err());
     assert!(alice.encrypt(b"not-a-group".to_vec(), b"x".to_vec()).is_err());
 }
+
+const KEY: [u8; 32] = [7; 32];
+
+#[test]
+fn a_saved_device_restored_mid_conversation_keeps_talking() {
+    let (mut alice, bob) = alice_and_bob();
+    let first = alice.encrypt(GROUP.to_vec(), b"before the restart".to_vec()).unwrap();
+
+    // Bob's app closes: his state is saved, then loaded on the next start.
+    let saved = bob.snapshot(KEY.to_vec()).unwrap();
+    drop(bob);
+    let mut bob = MlsDevice::restore(saved, KEY.to_vec()).unwrap();
+    assert_eq!(bob.identity(), b"bob");
+
+    assert_eq!(read(&mut bob, GROUP, &first), ("alice".into(), "before the restart".into()));
+    let reply = bob.encrypt(GROUP.to_vec(), b"back again".to_vec()).unwrap();
+    assert_eq!(read(&mut alice, GROUP, &reply), ("bob".into(), "back again".into()));
+}
+
+#[test]
+fn a_key_package_handed_out_before_a_restart_still_works_after() {
+    let mut alice = device("alice");
+    let carol = device("carol");
+    let key_package = carol.key_package().unwrap(); // uploaded to the server
+    let mut carol = MlsDevice::restore(carol.snapshot(KEY.to_vec()).unwrap(), KEY.to_vec()).unwrap();
+
+    alice.create_group(GROUP.to_vec()).unwrap();
+    let invitation = alice.add_member(GROUP.to_vec(), key_package).unwrap();
+    carol.join(invitation.welcome).unwrap();
+    let hello = alice.encrypt(GROUP.to_vec(), b"hi carol".to_vec()).unwrap();
+    assert_eq!(read(&mut carol, GROUP, &hello).1, "hi carol");
+}
+
+#[test]
+fn the_saved_state_is_sealed() {
+    let (_alice, bob) = alice_and_bob();
+    let saved = bob.snapshot(KEY.to_vec()).unwrap();
+    // Nothing readable inside, and every save looks different (random nonce).
+    assert!(!saved.windows(3).any(|w| w == b"bob"));
+    assert_ne!(saved, bob.snapshot(KEY.to_vec()).unwrap());
+
+    assert!(MlsDevice::restore(saved.clone(), [8; 32].to_vec()).is_err()); // wrong key
+    let mut changed = saved.clone();
+    let middle = changed.len() / 2;
+    changed[middle] ^= 1;
+    assert!(MlsDevice::restore(changed, KEY.to_vec()).is_err()); // one bit changed
+    assert!(MlsDevice::restore(saved, b"short".to_vec()).is_err()); // not a key
+    assert!(MlsDevice::restore(b"garbage".to_vec(), KEY.to_vec()).is_err());
+}

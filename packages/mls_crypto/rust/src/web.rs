@@ -21,6 +21,19 @@ impl WebMlsDevice {
         MlsDevice::new(identity).map(WebMlsDevice).map_err(js_error)
     }
 
+    /// The device [snapshot] saved (see MlsDevice::restore).
+    pub fn restore(sealed: Vec<u8>, key: Vec<u8>) -> Result<WebMlsDevice, JsError> {
+        MlsDevice::restore(sealed, key).map(WebMlsDevice).map_err(js_error)
+    }
+
+    pub fn snapshot(&self, key: Vec<u8>) -> Result<Vec<u8>, JsError> {
+        self.0.snapshot(key).map_err(js_error)
+    }
+
+    pub fn identity(&self) -> Vec<u8> {
+        self.0.identity()
+    }
+
     #[wasm_bindgen(js_name = keyPackage)]
     pub fn key_package(&self) -> Result<Vec<u8>, JsError> {
         self.0.key_package().map_err(js_error)

@@ -37,6 +37,12 @@ export class WebInvitation {
 if (Symbol.dispose) WebInvitation.prototype[Symbol.dispose] = WebInvitation.prototype.free;
 
 export class WebMlsDevice {
+    static __wrap(ptr) {
+        const obj = Object.create(WebMlsDevice.prototype);
+        obj.__wbg_ptr = ptr;
+        WebMlsDeviceFinalization.register(obj, obj.__wbg_ptr, obj);
+        return obj;
+    }
     __destroy_into_raw() {
         const ptr = this.__wbg_ptr;
         this.__wbg_ptr = 0;
@@ -105,6 +111,15 @@ export class WebMlsDevice {
         var v3 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
         wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
         return v3;
+    }
+    /**
+     * @returns {Uint8Array}
+     */
+    identity() {
+        const ret = wasm.webmlsdevice_identity(this.__wbg_ptr);
+        var v1 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+        wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+        return v1;
     }
     /**
      * @param {Uint8Array | number[]} welcome
@@ -183,6 +198,45 @@ export class WebMlsDevice {
             throw takeFromExternrefTable0(ret[1]);
         }
         return WebReceived.__wrap(ret[0]);
+    }
+    /**
+     * The device [snapshot] saved (see MlsDevice::restore).
+     * @param {Uint8Array | number[]} sealed
+     * @param {Uint8Array | number[]} key
+     * @returns {WebMlsDevice}
+     */
+    static restore(sealed, key) {
+        let ptr0, len0, ptr1, len1;
+        try {
+            ptr0 = passArray8ToWasm0(sealed, wasm.__wbindgen_malloc);
+            len0 = WASM_VECTOR_LEN;
+            ptr1 = passArray8ToWasm0(key, wasm.__wbindgen_malloc);
+            len1 = WASM_VECTOR_LEN;
+        } catch (e) {
+            if (ptr1) { wasm.__wbindgen_free(ptr1, len1 * 1, 1); }
+            if (ptr0) { wasm.__wbindgen_free(ptr0, len0 * 1, 1); }
+            throw e;
+        }
+        const ret = wasm.webmlsdevice_restore(ptr0, len0, ptr1, len1);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return WebMlsDevice.__wrap(ret[0]);
+    }
+    /**
+     * @param {Uint8Array | number[]} key
+     * @returns {Uint8Array}
+     */
+    snapshot(key) {
+        const ptr0 = passArray8ToWasm0(key, wasm.__wbindgen_malloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.webmlsdevice_snapshot(this.__wbg_ptr, ptr0, len0);
+        if (ret[3]) {
+            throw takeFromExternrefTable0(ret[2]);
+        }
+        var v2 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+        wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+        return v2;
     }
 }
 if (Symbol.dispose) WebMlsDevice.prototype[Symbol.dispose] = WebMlsDevice.prototype.free;

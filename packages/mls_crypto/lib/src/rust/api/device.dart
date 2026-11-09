@@ -7,7 +7,8 @@ import '../frb_generated.dart';
 
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `err`, `group`
+// These functions are ignored because they are not marked as `pub`: `bytes`, `cipher`, `err`, `group`, `put_bytes`, `take`, `u32`
+// These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `Reader`
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `fmt`, `fmt`
 
 // Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<MlsDevice>>
@@ -27,6 +28,9 @@ abstract class MlsDevice implements RustOpaqueInterface {
     required List<int> groupId,
     required List<int> plaintext,
   });
+
+  /// The identity this device registered with.
+  Future<Uint8List> identity();
 
   /// Joins the group a welcome invites this device to; returns its id.
   Future<Uint8List> join({required List<int> welcome});
@@ -50,6 +54,22 @@ abstract class MlsDevice implements RustOpaqueInterface {
     required List<int> groupId,
     required List<int> message,
   });
+
+  /// The device [snapshot] saved. Fails, without revealing anything, if
+  /// the key is wrong or the bytes were changed.
+  static Future<MlsDevice> restore({
+    required List<int> sealed,
+    required List<int> key,
+  }) => RustLib.instance.api.crateApiDeviceMlsDeviceRestore(
+    sealed: sealed,
+    key: key,
+  );
+
+  /// Everything this device knows (its keys, unused key packages, every
+  /// group's state), sealed with AES-256-GCM under [key] (32 random bytes
+  /// the app keeps in the platform's secure storage). Save it after every
+  /// change: a device that loses it loses its encrypted chats.
+  Future<Uint8List> snapshot({required List<int> key});
 }
 
 /// What adding someone to a group produces: a commit for the members who
