@@ -8,8 +8,16 @@ edition = "2024"
 # on the web); staticlib for iOS later.
 crate-type = ["cdylib", "staticlib", "rlib"]
 
+[features]
+# The Dart bridge (flutter_rust_bridge) for phones and desktops. The browser
+# build turns it off and uses src/web.rs instead: the bridge's browser
+# support needs WebAssembly threads, and those need cross-origin isolation,
+# which would break the sign-in popup and media from the storage bucket.
+default = ["frb"]
+frb = ["dep:flutter_rust_bridge"]
+
 [dependencies]
-flutter_rust_bridge = "=2.13.0"
+flutter_rust_bridge = { version = "=2.13.0", optional = true }
 openmls = "0.9.2"
 openmls_basic_credential = "0.6.0"
 openmls_rust_crypto = "0.6.0"
@@ -21,6 +29,9 @@ openmls = { version = "0.9.2", features = ["js"] }
 # Older crypto libraries inside OpenMLS's provider use getrandom 0.2, which
 # needs the same switch of its own.
 getrandom_02 = { package = "getrandom", version = "0.2", features = ["js"] }
+# The browser binding (src/web.rs), called from Dart directly.
+wasm-bindgen = "=0.2.130"
+js-sys = "=0.3.107"
 
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(frb_expand)'] }

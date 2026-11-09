@@ -1411,10 +1411,12 @@ version = "0.1.0"
 dependencies = [
  "flutter_rust_bridge",
  "getrandom 0.2.17",
+ "js-sys",
  "openmls",
  "openmls_basic_credential",
  "openmls_rust_crypto",
  "openmls_traits",
+ "wasm-bindgen",
 ]
 
 [[package]]

@@ -9,27 +9,29 @@ void main() {
   final group = utf8.encode('conversation:5');
 
   test('two devices exchange an encrypted message through the bridge', () async {
-    final alice = await MlsDevice.newInstance(identity: utf8.encode('alice'));
-    final bob = await MlsDevice.newInstance(identity: utf8.encode('bob'));
+    final alice = await createMlsDevice(utf8.encode('alice'));
+    final bob = await createMlsDevice(utf8.encode('bob'));
 
-    await alice.createGroup(groupId: group);
-    final invitation = await alice.addMember(groupId: group, keyPackage: await bob.keyPackage());
-    expect(await bob.join(welcome: invitation.welcome), group);
+    await alice.createGroup(group);
+    final invitation = await alice.addMember(group, await bob.keyPackage());
+    expect(await bob.join(invitation.welcome), group);
 
-    final ciphertext = await alice.encrypt(groupId: group, plaintext: utf8.encode('hi bob 👋'));
+    final ciphertext = await alice.encrypt(group, utf8.encode('hi bob 👋'));
     expect(utf8.decode(ciphertext, allowMalformed: true), isNot(contains('hi bob')));
 
-    final received = await bob.receive(groupId: group, message: ciphertext);
+    final received = await bob.receive(group, ciphertext);
+    expect(received.isMessage, isTrue);
     expect(utf8.decode(received.sender!), 'alice');
     expect(utf8.decode(received.plaintext!), 'hi bob 👋');
+    expect((await alice.members(group)).map(utf8.decode).toSet(), {'alice', 'bob'});
   });
 
   test('the self-test passes on this platform', () async {
     expect(await mlsSelfTest(), startsWith('OK'));
   });
 
-  test('a Rust error arrives as an MlsError, not a crash', () async {
-    final alice = await MlsDevice.newInstance(identity: utf8.encode('alice'));
-    await expectLater(alice.join(welcome: [1, 2, 3]), throwsA(isA<MlsError>()));
+  test('a Rust error arrives as an MlsException, not a crash', () async {
+    final alice = await createMlsDevice(utf8.encode('alice'));
+    await expectLater(alice.join([1, 2, 3]), throwsA(isA<MlsException>()));
   });
 }

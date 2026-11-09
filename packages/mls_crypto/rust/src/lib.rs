@@ -7,4 +7,8 @@
 //!
 //! Never our own crypto: all of it is OpenMLS and its RustCrypto provider.
 pub mod api;
+#[cfg(feature = "frb")]
 mod frb_generated;
+/// The browser's binding (built without the Dart bridge, see Cargo.toml).
+#[cfg(all(target_arch = "wasm32", not(feature = "frb")))]
+pub mod web;

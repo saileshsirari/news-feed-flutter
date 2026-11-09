@@ -1,0 +1,52 @@
+import 'dart:typed_data';
+
+import '../mls_device.dart';
+import '../rust/api/device.dart' as rust;
+import '../rust/frb_generated.dart';
+
+/// Phones and desktops: the Rust library through flutter_rust_bridge.
+Future<void> initPlatform() => RustLib.init();
+
+Future<MlsDevice> createDevice(List<int> identity) async =>
+    _NativeDevice(await _guard(() => rust.MlsDevice.newInstance(identity: identity)));
+
+Future<T> _guard<T>(Future<T> Function() call) async {
+  try {
+    return await call();
+  } on rust.MlsError catch (e) {
+    throw MlsException(e.field0);
+  }
+}
+
+class _NativeDevice implements MlsDevice {
+  _NativeDevice(this._device);
+  final rust.MlsDevice _device;
+
+  @override
+  Future<Uint8List> keyPackage() => _guard(_device.keyPackage);
+
+  @override
+  Future<void> createGroup(List<int> groupId) => _guard(() => _device.createGroup(groupId: groupId));
+
+  @override
+  Future<MlsInvitation> addMember(List<int> groupId, List<int> keyPackage) => _guard(() async {
+        final invitation = await _device.addMember(groupId: groupId, keyPackage: keyPackage);
+        return MlsInvitation(commit: invitation.commit, welcome: invitation.welcome);
+      });
+
+  @override
+  Future<Uint8List> join(List<int> welcome) => _guard(() => _device.join(welcome: welcome));
+
+  @override
+  Future<Uint8List> encrypt(List<int> groupId, List<int> plaintext) =>
+      _guard(() => _device.encrypt(groupId: groupId, plaintext: plaintext));
+
+  @override
+  Future<MlsReceived> receive(List<int> groupId, List<int> message) => _guard(() async {
+        final received = await _device.receive(groupId: groupId, message: message);
+        return MlsReceived(sender: received.sender, plaintext: received.plaintext);
+      });
+
+  @override
+  Future<List<Uint8List>> members(List<int> groupId) => _guard(() => _device.members(groupId: groupId));
+}
