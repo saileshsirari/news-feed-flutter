@@ -185,11 +185,19 @@ class MessageStore {
     return words.map((w) => '"$w"*').join(' ');
   }
 
-  /// Forgets everything (logging out).
+  /// A named value kept for this device (see DeviceBlobs), or null.
+  Future<Uint8List?> blob(String name) async =>
+      (await (db.select(db.deviceBlobs)..where((b) => b.name.equals(name))).getSingleOrNull())?.value;
+
+  Future<void> putBlob(String name, Uint8List value) =>
+      db.into(db.deviceBlobs).insertOnConflictUpdate(DeviceBlobsCompanion.insert(name: name, value: value));
+
+  /// Forgets everything (logging out), the device's saved values included.
   Future<void> clear() async {
     await db.transaction(() async {
       await db.delete(db.chatMessages).go();
       await db.delete(db.syncedRanges).go();
+      await db.delete(db.deviceBlobs).go();
     });
   }
 }

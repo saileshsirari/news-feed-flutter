@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:chat_store/chat_store.dart';
 import 'package:drift/drift.dart' show driftRuntimeOptions;
@@ -229,6 +230,15 @@ void main() {
     expect(jsonDecode((await store.byMessageId(1, 1002))!.json)['reactions'], ['x']);
     expect(await store.byMessageId(1, 9999), isNull);
     await store.updateJson(1, 9999, '{}'); // not here: nothing happens
+  });
+
+  test('keeps named values for the device, and clear forgets them too', () async {
+    expect(await store.blob('e2e'), isNull);
+    await store.putBlob('e2e', Uint8List.fromList([1, 2, 3]));
+    await store.putBlob('e2e', Uint8List.fromList([4, 5]));
+    expect(await store.blob('e2e'), [4, 5]);
+    await store.clear();
+    expect(await store.blob('e2e'), isNull);
   });
 
   test('clear forgets everything', () async {

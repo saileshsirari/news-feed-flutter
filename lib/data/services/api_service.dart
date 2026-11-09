@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:typed_data';
 import 'package:http/http.dart' as http;
 import '../../config/app_config.dart';
 import '../../models/models.dart';
@@ -82,6 +83,25 @@ class ApiService {
     final res = await http.Response.fromStream(await _http.send(request));
     if (res.statusCode >= 400) throw ApiException(res.statusCode, res.body);
   }
+
+  /// Uploads this device's public MLS key packages; [replace] drops its older
+  /// ones first (a fresh identity). Returns how many it now has.
+  Future<int> uploadKeyPackages(int deviceId, List<Uint8List> keyPackages, {bool replace = false}) async {
+    final res = await _http.post(
+      _uri('/e2e/key-packages'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({
+        'deviceId': deviceId,
+        'keyPackages': [for (final p in keyPackages) base64Encode(p)],
+        if (replace) 'replace': true,
+      }),
+    );
+    return _decodeObject(res)['count'] as int;
+  }
+
+  /// How many key packages this device still has on the server.
+  Future<int> keyPackageCount(int deviceId) async =>
+      _decodeObject(await _http.get(_uri('/e2e/key-packages/count', {'deviceId': deviceId})))['count'] as int;
 
   /// Registers this install (or refreshes it) for the signed-in user;
   /// returns its id on the server (push addresses are stored against it).

@@ -750,11 +750,220 @@ class SyncedRangesCompanion extends UpdateCompanion<SyncedRange> {
   }
 }
 
+class $DeviceBlobsTable extends DeviceBlobs
+    with TableInfo<$DeviceBlobsTable, DeviceBlob> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $DeviceBlobsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _nameMeta = const VerificationMeta('name');
+  @override
+  late final GeneratedColumn<String> name = GeneratedColumn<String>(
+    'name',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _valueMeta = const VerificationMeta('value');
+  @override
+  late final GeneratedColumn<Uint8List> value = GeneratedColumn<Uint8List>(
+    'value',
+    aliasedName,
+    false,
+    type: DriftSqlType.blob,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [name, value];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'device_blobs';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<DeviceBlob> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('name')) {
+      context.handle(
+        _nameMeta,
+        name.isAcceptableOrUnknown(data['name']!, _nameMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_nameMeta);
+    }
+    if (data.containsKey('value')) {
+      context.handle(
+        _valueMeta,
+        value.isAcceptableOrUnknown(data['value']!, _valueMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_valueMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {name};
+  @override
+  DeviceBlob map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return DeviceBlob(
+      name: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}name'],
+      )!,
+      value: attachedDatabase.typeMapping.read(
+        DriftSqlType.blob,
+        data['${effectivePrefix}value'],
+      )!,
+    );
+  }
+
+  @override
+  $DeviceBlobsTable createAlias(String alias) {
+    return $DeviceBlobsTable(attachedDatabase, alias);
+  }
+}
+
+class DeviceBlob extends DataClass implements Insertable<DeviceBlob> {
+  final String name;
+  final Uint8List value;
+  const DeviceBlob({required this.name, required this.value});
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['name'] = Variable<String>(name);
+    map['value'] = Variable<Uint8List>(value);
+    return map;
+  }
+
+  DeviceBlobsCompanion toCompanion(bool nullToAbsent) {
+    return DeviceBlobsCompanion(name: Value(name), value: Value(value));
+  }
+
+  factory DeviceBlob.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return DeviceBlob(
+      name: serializer.fromJson<String>(json['name']),
+      value: serializer.fromJson<Uint8List>(json['value']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'name': serializer.toJson<String>(name),
+      'value': serializer.toJson<Uint8List>(value),
+    };
+  }
+
+  DeviceBlob copyWith({String? name, Uint8List? value}) =>
+      DeviceBlob(name: name ?? this.name, value: value ?? this.value);
+  DeviceBlob copyWithCompanion(DeviceBlobsCompanion data) {
+    return DeviceBlob(
+      name: data.name.present ? data.name.value : this.name,
+      value: data.value.present ? data.value.value : this.value,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('DeviceBlob(')
+          ..write('name: $name, ')
+          ..write('value: $value')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(name, $driftBlobEquality.hash(value));
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is DeviceBlob &&
+          other.name == this.name &&
+          $driftBlobEquality.equals(other.value, this.value));
+}
+
+class DeviceBlobsCompanion extends UpdateCompanion<DeviceBlob> {
+  final Value<String> name;
+  final Value<Uint8List> value;
+  final Value<int> rowid;
+  const DeviceBlobsCompanion({
+    this.name = const Value.absent(),
+    this.value = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  DeviceBlobsCompanion.insert({
+    required String name,
+    required Uint8List value,
+    this.rowid = const Value.absent(),
+  }) : name = Value(name),
+       value = Value(value);
+  static Insertable<DeviceBlob> custom({
+    Expression<String>? name,
+    Expression<Uint8List>? value,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (name != null) 'name': name,
+      if (value != null) 'value': value,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  DeviceBlobsCompanion copyWith({
+    Value<String>? name,
+    Value<Uint8List>? value,
+    Value<int>? rowid,
+  }) {
+    return DeviceBlobsCompanion(
+      name: name ?? this.name,
+      value: value ?? this.value,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (name.present) {
+      map['name'] = Variable<String>(name.value);
+    }
+    if (value.present) {
+      map['value'] = Variable<Uint8List>(value.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('DeviceBlobsCompanion(')
+          ..write('name: $name, ')
+          ..write('value: $value, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$ChatDatabase extends GeneratedDatabase {
   _$ChatDatabase(QueryExecutor e) : super(e);
   $ChatDatabaseManager get managers => $ChatDatabaseManager(this);
   late final $ChatMessagesTable chatMessages = $ChatMessagesTable(this);
   late final $SyncedRangesTable syncedRanges = $SyncedRangesTable(this);
+  late final $DeviceBlobsTable deviceBlobs = $DeviceBlobsTable(this);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -762,6 +971,7 @@ abstract class _$ChatDatabase extends GeneratedDatabase {
   List<DatabaseSchemaEntity> get allSchemaEntities => [
     chatMessages,
     syncedRanges,
+    deviceBlobs,
   ];
 }
 
@@ -1187,6 +1397,153 @@ typedef $$SyncedRangesTableProcessedTableManager =
       SyncedRange,
       PrefetchHooks Function()
     >;
+typedef $$DeviceBlobsTableCreateCompanionBuilder =
+    DeviceBlobsCompanion Function({
+      required String name,
+      required Uint8List value,
+      Value<int> rowid,
+    });
+typedef $$DeviceBlobsTableUpdateCompanionBuilder =
+    DeviceBlobsCompanion Function({
+      Value<String> name,
+      Value<Uint8List> value,
+      Value<int> rowid,
+    });
+
+class $$DeviceBlobsTableFilterComposer
+    extends Composer<_$ChatDatabase, $DeviceBlobsTable> {
+  $$DeviceBlobsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<Uint8List> get value => $composableBuilder(
+    column: $table.value,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$DeviceBlobsTableOrderingComposer
+    extends Composer<_$ChatDatabase, $DeviceBlobsTable> {
+  $$DeviceBlobsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<Uint8List> get value => $composableBuilder(
+    column: $table.value,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$DeviceBlobsTableAnnotationComposer
+    extends Composer<_$ChatDatabase, $DeviceBlobsTable> {
+  $$DeviceBlobsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get name =>
+      $composableBuilder(column: $table.name, builder: (column) => column);
+
+  GeneratedColumn<Uint8List> get value =>
+      $composableBuilder(column: $table.value, builder: (column) => column);
+}
+
+class $$DeviceBlobsTableTableManager
+    extends
+        RootTableManager<
+          _$ChatDatabase,
+          $DeviceBlobsTable,
+          DeviceBlob,
+          $$DeviceBlobsTableFilterComposer,
+          $$DeviceBlobsTableOrderingComposer,
+          $$DeviceBlobsTableAnnotationComposer,
+          $$DeviceBlobsTableCreateCompanionBuilder,
+          $$DeviceBlobsTableUpdateCompanionBuilder,
+          (
+            DeviceBlob,
+            BaseReferences<_$ChatDatabase, $DeviceBlobsTable, DeviceBlob>,
+          ),
+          DeviceBlob,
+          PrefetchHooks Function()
+        > {
+  $$DeviceBlobsTableTableManager(_$ChatDatabase db, $DeviceBlobsTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$DeviceBlobsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$DeviceBlobsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$DeviceBlobsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback: ({
+            Value<String> name = const Value.absent(),
+            Value<Uint8List> value = const Value.absent(),
+            Value<int> rowid = const Value.absent(),
+          }) => DeviceBlobsCompanion(name: name, value: value, rowid: rowid),
+          createCompanionCallback:
+              ({
+                required String name,
+                required Uint8List value,
+                Value<int> rowid = const Value.absent(),
+              }) => DeviceBlobsCompanion.insert(
+                name: name,
+                value: value,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable<$DeviceBlobsTable, DeviceBlob>(table),
+                  BaseReferences<_$ChatDatabase, $DeviceBlobsTable, DeviceBlob>(
+                    db,
+                    table,
+                    e,
+                  ),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$DeviceBlobsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$ChatDatabase,
+      $DeviceBlobsTable,
+      DeviceBlob,
+      $$DeviceBlobsTableFilterComposer,
+      $$DeviceBlobsTableOrderingComposer,
+      $$DeviceBlobsTableAnnotationComposer,
+      $$DeviceBlobsTableCreateCompanionBuilder,
+      $$DeviceBlobsTableUpdateCompanionBuilder,
+      (
+        DeviceBlob,
+        BaseReferences<_$ChatDatabase, $DeviceBlobsTable, DeviceBlob>,
+      ),
+      DeviceBlob,
+      PrefetchHooks Function()
+    >;
 
 class $ChatDatabaseManager {
   final _$ChatDatabase _db;
@@ -1195,4 +1552,6 @@ class $ChatDatabaseManager {
       $$ChatMessagesTableTableManager(_db, _db.chatMessages);
   $$SyncedRangesTableTableManager get syncedRanges =>
       $$SyncedRangesTableTableManager(_db, _db.syncedRanges);
+  $$DeviceBlobsTableTableManager get deviceBlobs =>
+      $$DeviceBlobsTableTableManager(_db, _db.deviceBlobs);
 }

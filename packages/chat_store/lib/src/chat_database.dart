@@ -45,12 +45,23 @@ class SyncedRanges extends Table {
   Set<Column> get primaryKey => {conversationId, lowSeq};
 }
 
-@DriftDatabase(tables: [ChatMessages, SyncedRanges])
+/// Small named values that belong to this device and user, such as the
+/// end-to-end encryption state (already sealed before it gets here).
+class DeviceBlobs extends Table {
+  TextColumn get name => text()();
+  BlobColumn get value => blob()();
+
+  @override
+  Set<Column> get primaryKey => {name};
+}
+
+@DriftDatabase(tables: [ChatMessages, SyncedRanges, DeviceBlobs])
 class ChatDatabase extends _$ChatDatabase {
   ChatDatabase(super.executor);
 
+  /// 1: messages, synced ranges, search. 2: DeviceBlobs.
   @override
-  int get schemaVersion => 1;
+  int get schemaVersion => 2;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -62,6 +73,10 @@ class ChatDatabase extends _$ChatDatabase {
           for (final statement in _searchIndex) {
             await customStatement(statement);
           }
+        },
+        // Existing installs keep their messages and gain the new table.
+        onUpgrade: (m, from, to) async {
+          if (from < 2) await m.createTable(deviceBlobs);
         },
       );
 

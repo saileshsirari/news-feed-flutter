@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math';
 
 import 'package:device_info_plus/device_info_plus.dart';
@@ -6,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../data/services/service_providers.dart';
+import '../e2e/e2e_device.dart';
 import '../push/push_registration.dart';
 
 /// What the server is told about this install: a name you'd recognise in a
@@ -103,6 +105,11 @@ final deviceRegistrarProvider = Provider<Future<void> Function(int userId)>((ref
           .read(apiServiceProvider)
           .registerDevice(installId, name: device.name, platform: device.platform);
       await ref.read(deviceIdsProvider).save(userId, deviceId);
+      // End-to-end encryption: this device's keys exist, and others can add
+      // it to encrypted chats (enough key packages on the server).
+      unawaited(ref.read(e2eDeviceProvider(userId)).ensureKeyPackages(deviceId).catchError((Object e) {
+        debugPrint('[e2e] key packages not topped up (will retry next start): $e');
+      }));
       await ref.read(pushRegistrationProvider).refresh(userId);
     } on Object catch (e) {
       debugPrint('[devices] registration failed (will retry next start): $e');
