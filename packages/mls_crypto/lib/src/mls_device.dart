@@ -23,6 +23,16 @@ abstract interface class MlsDevice {
   /// other members, a welcome for the new device.
   Future<MlsInvitation> addMember(List<int> groupId, List<int> keyPackage);
 
+  /// Adds several devices in one step: one commit, one welcome they all join with.
+  Future<MlsInvitation> addMembers(List<int> groupId, List<List<int>> keyPackages);
+
+  /// Whether this device is in the group.
+  Future<bool> hasGroup(List<int> groupId);
+
+  /// How many changes the group has been through. A change is only valid on
+  /// top of the latest one, so the server checks this.
+  Future<int> epoch(List<int> groupId);
+
   /// Joins the group a welcome invites this device to; returns its id.
   Future<Uint8List> join(List<int> welcome);
 

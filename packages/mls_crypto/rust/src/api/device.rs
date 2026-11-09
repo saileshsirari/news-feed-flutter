@@ -228,25 +228,48 @@ impl MlsDevice {
     /// Adds the device behind [key_package] to the group. The commit goes to
     /// the group's other members, the welcome to the new device.
     pub fn add_member(&mut self, group_id: Vec<u8>, key_package: Vec<u8>) -> Result<Invitation, MlsError> {
-        let key_package = match MlsMessageIn::tls_deserialize_exact(key_package)
-            .map_err(|e| err("reading key package", e))?
-            .extract()
-        {
-            MlsMessageBodyIn::KeyPackage(kp) => kp
-                .validate(self.provider.crypto(), ProtocolVersion::Mls10)
-                .map_err(|e| err("key package isn't valid", e))?,
-            _ => return Err(MlsError("not a key package".into())),
-        };
+        self.add_members(group_id, vec![key_package])
+    }
+
+    /// Adds several devices in one step: one commit for the existing
+    /// members, and one welcome that every new device can join with.
+    pub fn add_members(&mut self, group_id: Vec<u8>, key_packages: Vec<Vec<u8>>) -> Result<Invitation, MlsError> {
+        if key_packages.is_empty() {
+            return Err(MlsError("no one to add".into()));
+        }
+        let mut validated = Vec::with_capacity(key_packages.len());
+        for bytes in key_packages {
+            match MlsMessageIn::tls_deserialize_exact(bytes)
+                .map_err(|e| err("reading key package", e))?
+                .extract()
+            {
+                MlsMessageBodyIn::KeyPackage(kp) => validated.push(
+                    kp.validate(self.provider.crypto(), ProtocolVersion::Mls10)
+                        .map_err(|e| err("key package isn't valid", e))?,
+                ),
+                _ => return Err(MlsError("not a key package".into())),
+            }
+        }
         let (provider, signer) = (&self.provider, &self.signer);
         let group = self.groups.get_mut(&group_id).ok_or_else(|| MlsError("not in that group".into()))?;
-        let (commit, welcome, _group_info) = group
-            .add_members(provider, signer, core::slice::from_ref(&key_package))
-            .map_err(|e| err("adding member", e))?;
+        let (commit, welcome, _group_info) =
+            group.add_members(provider, signer, &validated).map_err(|e| err("adding members", e))?;
         group.merge_pending_commit(provider).map_err(|e| err("applying commit", e))?;
         Ok(Invitation {
             commit: commit.to_bytes().map_err(|e| err("commit bytes", e))?,
             welcome: welcome.to_bytes().map_err(|e| err("welcome bytes", e))?,
         })
+    }
+
+    /// Whether this device is in the group.
+    pub fn has_group(&self, group_id: Vec<u8>) -> bool {
+        self.groups.contains_key(&group_id)
+    }
+
+    /// The group's epoch: how many changes it has been through. A change is
+    /// only valid on top of the latest one, so the server checks this.
+    pub fn epoch(&self, group_id: Vec<u8>) -> Result<u64, MlsError> {
+        Ok(self.groups.get(&group_id).ok_or_else(|| MlsError("not in that group".into()))?.epoch().as_u64())
     }
 
     /// Joins the group a welcome invites this device to; returns its id.

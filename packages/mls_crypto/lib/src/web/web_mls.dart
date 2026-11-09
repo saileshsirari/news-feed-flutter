@@ -64,6 +64,18 @@ class _WebDevice implements MlsDevice {
       });
 
   @override
+  Future<MlsInvitation> addMembers(List<int> groupId, List<List<int>> keyPackages) async => _guard(() {
+        final invitation = _device.addMembers(_bytes(groupId), [for (final p in keyPackages) _bytes(p)].toJS);
+        return MlsInvitation(commit: invitation.commit.toDart, welcome: invitation.welcome.toDart);
+      });
+
+  @override
+  Future<bool> hasGroup(List<int> groupId) async => _guard(() => _device.hasGroup(_bytes(groupId)));
+
+  @override
+  Future<int> epoch(List<int> groupId) async => _guard(() => _device.epoch(_bytes(groupId)).toInt());
+
+  @override
   Future<Uint8List> join(List<int> welcome) async => _guard(() => _device.join(_bytes(welcome)).toDart);
 
   @override
@@ -106,6 +118,9 @@ extension type _Device(JSObject _) implements JSObject {
   external JSUint8Array keyPackage();
   external void createGroup(JSUint8Array groupId);
   external _Invitation addMember(JSUint8Array groupId, JSUint8Array keyPackage);
+  external _Invitation addMembers(JSUint8Array groupId, JSArray<JSUint8Array> keyPackages);
+  external bool hasGroup(JSUint8Array groupId);
+  external double epoch(JSUint8Array groupId);
   external JSUint8Array join(JSUint8Array welcome);
   external JSUint8Array encrypt(JSUint8Array groupId, JSUint8Array plaintext);
   external _Received receive(JSUint8Array groupId, JSUint8Array message);

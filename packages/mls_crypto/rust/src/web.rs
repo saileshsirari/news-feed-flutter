@@ -50,6 +50,24 @@ impl WebMlsDevice {
         Ok(WebInvitation { commit: invitation.commit, welcome: invitation.welcome })
     }
 
+    /// [key_packages]: an array of Uint8Array.
+    #[wasm_bindgen(js_name = addMembers)]
+    pub fn add_members(&mut self, group_id: Vec<u8>, key_packages: js_sys::Array) -> Result<WebInvitation, JsError> {
+        let packages = key_packages.iter().map(|p| js_sys::Uint8Array::new(&p).to_vec()).collect();
+        let invitation = self.0.add_members(group_id, packages).map_err(js_error)?;
+        Ok(WebInvitation { commit: invitation.commit, welcome: invitation.welcome })
+    }
+
+    #[wasm_bindgen(js_name = hasGroup)]
+    pub fn has_group(&self, group_id: Vec<u8>) -> bool {
+        self.0.has_group(group_id)
+    }
+
+    /// As a JavaScript number (epochs never get near 2^53).
+    pub fn epoch(&self, group_id: Vec<u8>) -> Result<f64, JsError> {
+        self.0.epoch(group_id).map(|e| e as f64).map_err(js_error)
+    }
+
     pub fn join(&mut self, welcome: Vec<u8>) -> Result<Vec<u8>, JsError> {
         self.0.join(welcome).map_err(js_error)
     }

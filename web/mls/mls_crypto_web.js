@@ -77,6 +77,21 @@ export class WebMlsDevice {
         return WebInvitation.__wrap(ret[0]);
     }
     /**
+     * [key_packages]: an array of Uint8Array.
+     * @param {Uint8Array | number[]} group_id
+     * @param {Array<any>} key_packages
+     * @returns {WebInvitation}
+     */
+    addMembers(group_id, key_packages) {
+        const ptr0 = passArray8ToWasm0(group_id, wasm.__wbindgen_malloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.webmlsdevice_addMembers(this.__wbg_ptr, ptr0, len0, key_packages);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return WebInvitation.__wrap(ret[0]);
+    }
+    /**
      * @param {Uint8Array | number[]} group_id
      */
     createGroup(group_id) {
@@ -111,6 +126,30 @@ export class WebMlsDevice {
         var v3 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
         wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
         return v3;
+    }
+    /**
+     * As a JavaScript number (epochs never get near 2^53).
+     * @param {Uint8Array | number[]} group_id
+     * @returns {number}
+     */
+    epoch(group_id) {
+        const ptr0 = passArray8ToWasm0(group_id, wasm.__wbindgen_malloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.webmlsdevice_epoch(this.__wbg_ptr, ptr0, len0);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return ret[0];
+    }
+    /**
+     * @param {Uint8Array | number[]} group_id
+     * @returns {boolean}
+     */
+    hasGroup(group_id) {
+        const ptr0 = passArray8ToWasm0(group_id, wasm.__wbindgen_malloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.webmlsdevice_hasGroup(this.__wbg_ptr, ptr0, len0);
+        return ret !== 0;
     }
     /**
      * @returns {Uint8Array}
@@ -325,12 +364,24 @@ function __wbg_get_imports() {
         __wbg_getRandomValues_d2908e0b99612b91: function() { return handleError(function (arg0, arg1) {
             arg0.getRandomValues(arg1);
         }, arguments); },
+        __wbg_get_unchecked_e6325ad374eff861: function(arg0, arg1) {
+            const ret = arg0[arg1 >>> 0];
+            return ret;
+        },
         __wbg_length_186163212ffe79c3: function(arg0) {
+            const ret = arg0.length;
+            return ret;
+        },
+        __wbg_length_b03a0fabb109b1e9: function(arg0) {
             const ret = arg0.length;
             return ret;
         },
         __wbg_msCrypto_d5f06fad6bf1409b: function(arg0) {
             const ret = arg0.msCrypto;
+            return ret;
+        },
+        __wbg_new_13de428334042d26: function(arg0) {
+            const ret = new Uint8Array(arg0);
             return ret;
         },
         __wbg_new_37eb45aaf5eeb820: function() {

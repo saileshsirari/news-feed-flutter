@@ -41,6 +41,23 @@ void main() {
     await expectLater(restoreMlsDevice(await bob.snapshot(key), List.filled(32, 1)), throwsA(isA<MlsException>()));
   });
 
+  test('several devices added in one step join with one welcome', () async {
+    final alicePhone = await createMlsDevice(utf8.encode('alice/phone'));
+    final aliceWeb = await createMlsDevice(utf8.encode('alice/web'));
+    final bob = await createMlsDevice(utf8.encode('bob'));
+    await alicePhone.createGroup(group);
+    expect(await alicePhone.epoch(group), 0);
+    final invitation = await alicePhone.addMembers(group, [await aliceWeb.keyPackage(), await bob.keyPackage()]);
+    expect(await alicePhone.epoch(group), 1);
+    await aliceWeb.join(invitation.welcome);
+    await bob.join(invitation.welcome);
+    expect(await bob.hasGroup(group), isTrue);
+    expect(await bob.hasGroup(utf8.encode('other')), isFalse);
+    final hi = await alicePhone.encrypt(group, utf8.encode('hi all'));
+    expect(utf8.decode((await bob.receive(group, hi)).plaintext!), 'hi all');
+    expect(utf8.decode((await aliceWeb.receive(group, hi)).plaintext!), 'hi all');
+  });
+
   test('the self-test passes on this platform', () async {
     expect(await mlsSelfTest(), startsWith('OK'));
   });

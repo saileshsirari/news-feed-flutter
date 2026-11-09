@@ -20,6 +20,13 @@ abstract class MlsDevice implements RustOpaqueInterface {
     required List<int> keyPackage,
   });
 
+  /// Adds several devices in one step: one commit for the existing
+  /// members, and one welcome that every new device can join with.
+  Future<Invitation> addMembers({
+    required List<int> groupId,
+    required List<Uint8List> keyPackages,
+  });
+
   /// Starts an encrypted group (a conversation) with just this device in it.
   Future<void> createGroup({required List<int> groupId});
 
@@ -28,6 +35,13 @@ abstract class MlsDevice implements RustOpaqueInterface {
     required List<int> groupId,
     required List<int> plaintext,
   });
+
+  /// The group's epoch: how many changes it has been through. A change is
+  /// only valid on top of the latest one, so the server checks this.
+  Future<BigInt> epoch({required List<int> groupId});
+
+  /// Whether this device is in the group.
+  Future<bool> hasGroup({required List<int> groupId});
 
   /// The identity this device registered with.
   Future<Uint8List> identity();

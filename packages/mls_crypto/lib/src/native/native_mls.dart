@@ -44,6 +44,21 @@ class _NativeDevice implements MlsDevice {
       });
 
   @override
+  Future<MlsInvitation> addMembers(List<int> groupId, List<List<int>> keyPackages) => _guard(() async {
+        final invitation = await _device.addMembers(
+          groupId: groupId,
+          keyPackages: [for (final p in keyPackages) p is Uint8List ? p : Uint8List.fromList(p)],
+        );
+        return MlsInvitation(commit: invitation.commit, welcome: invitation.welcome);
+      });
+
+  @override
+  Future<bool> hasGroup(List<int> groupId) => _guard(() => _device.hasGroup(groupId: groupId));
+
+  @override
+  Future<int> epoch(List<int> groupId) => _guard(() async => (await _device.epoch(groupId: groupId)).toInt());
+
+  @override
   Future<Uint8List> join(List<int> welcome) => _guard(() => _device.join(welcome: welcome));
 
   @override

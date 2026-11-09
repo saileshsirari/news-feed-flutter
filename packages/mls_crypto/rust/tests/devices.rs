@@ -137,3 +137,36 @@ fn the_saved_state_is_sealed() {
     assert!(MlsDevice::restore(saved, b"short".to_vec()).is_err()); // not a key
     assert!(MlsDevice::restore(b"garbage".to_vec(), KEY.to_vec()).is_err());
 }
+
+#[test]
+fn several_devices_added_in_one_step_all_join_with_the_same_welcome() {
+    let mut alice_phone = device("alice/phone");
+    let mut alice_web = device("alice/web");
+    let mut bob_phone = device("bob/phone");
+    alice_phone.create_group(GROUP.to_vec()).unwrap();
+    assert_eq!(alice_phone.epoch(GROUP.to_vec()).unwrap(), 0);
+
+    let invitation = alice_phone
+        .add_members(
+            GROUP.to_vec(),
+            vec![alice_web.key_package().unwrap(), bob_phone.key_package().unwrap()],
+        )
+        .unwrap();
+    assert_eq!(alice_phone.epoch(GROUP.to_vec()).unwrap(), 1);
+    alice_web.join(invitation.welcome.clone()).unwrap();
+    bob_phone.join(invitation.welcome).unwrap();
+    assert!(bob_phone.has_group(GROUP.to_vec()));
+    assert_eq!(bob_phone.epoch(GROUP.to_vec()).unwrap(), 1);
+
+    // Alice's other device reads her message (MLS doesn't let the sending
+    // device itself decrypt it; it keeps its own copy of the text).
+    let hi = alice_phone.encrypt(GROUP.to_vec(), b"hi from my phone".to_vec()).unwrap();
+    assert_eq!(read(&mut alice_web, GROUP, &hi).1, "hi from my phone");
+    assert_eq!(read(&mut bob_phone, GROUP, &hi).1, "hi from my phone");
+    // The sending device gets nothing to show for its own message: the app
+    // keeps the text it sent, rather than reading it back.
+    assert!(!alice_phone.receive(GROUP.to_vec(), hi.clone()).unwrap().is_message());
+    // Each message decrypts once: its key is deleted after use, so the app
+    // must store the text the first time.
+    assert!(alice_web.receive(GROUP.to_vec(), hi).is_err());
+}

@@ -67,7 +67,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.13.0';
 
   @override
-  int get rustContentHash => 1885957737;
+  int get rustContentHash => 300915643;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -85,6 +85,12 @@ abstract class RustLibApi extends BaseApi {
     required List<int> keyPackage,
   });
 
+  Future<Invitation> crateApiDeviceMlsDeviceAddMembers({
+    required MlsDevice that,
+    required List<int> groupId,
+    required List<Uint8List> keyPackages,
+  });
+
   Future<void> crateApiDeviceMlsDeviceCreateGroup({
     required MlsDevice that,
     required List<int> groupId,
@@ -94,6 +100,16 @@ abstract class RustLibApi extends BaseApi {
     required MlsDevice that,
     required List<int> groupId,
     required List<int> plaintext,
+  });
+
+  Future<BigInt> crateApiDeviceMlsDeviceEpoch({
+    required MlsDevice that,
+    required List<int> groupId,
+  });
+
+  Future<bool> crateApiDeviceMlsDeviceHasGroup({
+    required MlsDevice that,
+    required List<int> groupId,
   });
 
   Future<Uint8List> crateApiDeviceMlsDeviceIdentity({required MlsDevice that});
@@ -190,6 +206,46 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
+  Future<Invitation> crateApiDeviceMlsDeviceAddMembers({
+    required MlsDevice that,
+    required List<int> groupId,
+    required List<Uint8List> keyPackages,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_RefMut_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerMlsDevice(
+            that,
+            serializer,
+          );
+          sse_encode_list_prim_u_8_loose(groupId, serializer);
+          sse_encode_list_list_prim_u_8_strict(keyPackages, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 2,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_invitation,
+          decodeErrorData: sse_decode_mls_error,
+        ),
+        constMeta: kCrateApiDeviceMlsDeviceAddMembersConstMeta,
+        argValues: [that, groupId, keyPackages],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiDeviceMlsDeviceAddMembersConstMeta =>
+      const TaskConstMeta(
+        debugName: "MlsDevice_add_members",
+        argNames: ["that", "groupId", "keyPackages"],
+      );
+
+  @override
   Future<void> crateApiDeviceMlsDeviceCreateGroup({
     required MlsDevice that,
     required List<int> groupId,
@@ -206,7 +262,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 2,
+            funcId: 3,
             port: port_,
           );
         },
@@ -246,7 +302,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 3,
+            funcId: 4,
             port: port_,
           );
         },
@@ -268,6 +324,82 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
+  Future<BigInt> crateApiDeviceMlsDeviceEpoch({
+    required MlsDevice that,
+    required List<int> groupId,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerMlsDevice(
+            that,
+            serializer,
+          );
+          sse_encode_list_prim_u_8_loose(groupId, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 5,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_u_64,
+          decodeErrorData: sse_decode_mls_error,
+        ),
+        constMeta: kCrateApiDeviceMlsDeviceEpochConstMeta,
+        argValues: [that, groupId],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiDeviceMlsDeviceEpochConstMeta =>
+      const TaskConstMeta(
+        debugName: "MlsDevice_epoch",
+        argNames: ["that", "groupId"],
+      );
+
+  @override
+  Future<bool> crateApiDeviceMlsDeviceHasGroup({
+    required MlsDevice that,
+    required List<int> groupId,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerMlsDevice(
+            that,
+            serializer,
+          );
+          sse_encode_list_prim_u_8_loose(groupId, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 6,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_bool,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiDeviceMlsDeviceHasGroupConstMeta,
+        argValues: [that, groupId],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiDeviceMlsDeviceHasGroupConstMeta =>
+      const TaskConstMeta(
+        debugName: "MlsDevice_has_group",
+        argNames: ["that", "groupId"],
+      );
+
+  @override
   Future<Uint8List> crateApiDeviceMlsDeviceIdentity({required MlsDevice that}) {
     return handler.executeNormal(
       NormalTask(
@@ -280,7 +412,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 4,
+            funcId: 7,
             port: port_,
           );
         },
@@ -315,7 +447,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 5,
+            funcId: 8,
             port: port_,
           );
         },
@@ -351,7 +483,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 6,
+            funcId: 9,
             port: port_,
           );
         },
@@ -389,7 +521,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 7,
+            funcId: 10,
             port: port_,
           );
         },
@@ -420,7 +552,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 8,
+            funcId: 11,
             port: port_,
           );
         },
@@ -458,7 +590,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 9,
+            funcId: 12,
             port: port_,
           );
         },
@@ -493,7 +625,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 10,
+            funcId: 13,
             port: port_,
           );
         },
@@ -532,7 +664,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 11,
+            funcId: 14,
             port: port_,
           );
         },
@@ -563,7 +695,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 12,
+            funcId: 15,
             port: port_,
           );
         },
@@ -698,6 +830,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       sender: dco_decode_opt_list_prim_u_8_strict(arr[0]),
       plaintext: dco_decode_opt_list_prim_u_8_strict(arr[1]),
     );
+  }
+
+  @protected
+  BigInt dco_decode_u_64(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dcoDecodeU64(raw);
   }
 
   @protected
@@ -845,6 +983,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_sender = sse_decode_opt_list_prim_u_8_strict(deserializer);
     var var_plaintext = sse_decode_opt_list_prim_u_8_strict(deserializer);
     return Received(sender: var_sender, plaintext: var_plaintext);
+  }
+
+  @protected
+  BigInt sse_decode_u_64(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return deserializer.buffer.getBigUint64();
   }
 
   @protected
@@ -1011,6 +1155,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_u_64(BigInt self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    serializer.buffer.putBigUint64(self);
+  }
+
+  @protected
   void sse_encode_u_8(int self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     serializer.buffer.putUint8(self);
@@ -1064,6 +1214,17 @@ class MlsDeviceImpl extends RustOpaque implements MlsDevice {
     keyPackage: keyPackage,
   );
 
+  /// Adds several devices in one step: one commit for the existing
+  /// members, and one welcome that every new device can join with.
+  Future<Invitation> addMembers({
+    required List<int> groupId,
+    required List<Uint8List> keyPackages,
+  }) => RustLib.instance.api.crateApiDeviceMlsDeviceAddMembers(
+    that: this,
+    groupId: groupId,
+    keyPackages: keyPackages,
+  );
+
   /// Starts an encrypted group (a conversation) with just this device in it.
   Future<void> createGroup({required List<int> groupId}) => RustLib.instance.api
       .crateApiDeviceMlsDeviceCreateGroup(that: this, groupId: groupId);
@@ -1077,6 +1238,15 @@ class MlsDeviceImpl extends RustOpaque implements MlsDevice {
     groupId: groupId,
     plaintext: plaintext,
   );
+
+  /// The group's epoch: how many changes it has been through. A change is
+  /// only valid on top of the latest one, so the server checks this.
+  Future<BigInt> epoch({required List<int> groupId}) => RustLib.instance.api
+      .crateApiDeviceMlsDeviceEpoch(that: this, groupId: groupId);
+
+  /// Whether this device is in the group.
+  Future<bool> hasGroup({required List<int> groupId}) => RustLib.instance.api
+      .crateApiDeviceMlsDeviceHasGroup(that: this, groupId: groupId);
 
   /// The identity this device registered with.
   Future<Uint8List> identity() =>
