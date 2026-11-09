@@ -1,7 +1,9 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'data/services/media_providers.dart';
 import 'push/push_setup.dart';
+import 'package:mls_crypto/mls_crypto.dart';
 import 'data/services/service_providers.dart';
 import 'feed/login_screen.dart';
 import 'home/home_screen.dart';
@@ -11,6 +13,16 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   // Firebase for push on Android/iOS (no-op elsewhere, and if not set up).
   await setUpPush();
+  // The end-to-end encryption library (Rust). Not used by any chat yet; a
+  // failure to load must never stop the app.
+  try {
+    await initMlsCrypto();
+    // Debug builds only: prove the library works on this device by having
+    // two pretend devices exchange an encrypted message. Shows in the log.
+    if (kDebugMode) debugPrint('[e2e] self-test: ${await mlsSelfTest()}');
+  } on Object catch (e) {
+    debugPrint('[e2e] encryption library not available: $e');
+  }
   // ProviderScope holds every provider's value for the whole app (the
   // services, the current user, the socket). Providers themselves are just
   // global recipes; the state lives here.

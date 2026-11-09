@@ -24,6 +24,10 @@ void main() {
     expect(utf8.decode(received.plaintext!), 'hi bob 👋');
   });
 
+  test('the self-test passes on this platform', () async {
+    expect(await mlsSelfTest(), startsWith('OK'));
+  });
+
   test('a Rust error arrives as an MlsError, not a crash', () async {
     final alice = await MlsDevice.newInstance(identity: utf8.encode('alice'));
     await expectLater(alice.join(welcome: [1, 2, 3]), throwsA(isA<MlsError>()));
