@@ -1,0 +1,17 @@
+[package]
+name = "mls_crypto"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+openmls = "0.9.2"
+openmls_basic_credential = "0.6.0"
+openmls_rust_crypto = "0.6.0"
+openmls_traits = "0.6.0"
+
+# In the browser (WebAssembly), randomness comes from the browser's crypto API.
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+openmls = { version = "0.9.2", features = ["js"] }
+# Older crypto libraries inside OpenMLS's provider use getrandom 0.2, which
+# needs the same switch of its own.
+getrandom_02 = { package = "getrandom", version = "0.2", features = ["js"] }
