@@ -49,6 +49,39 @@ class AppSocket {
 
   Stream<Map<String, dynamic>> get events => _controller.stream;
 
+  /// Posts whose comments are open here, and how many sheets show each
+  /// (a thread opened from another sheet of the same post counts twice).
+  /// They get live changes ("post_comments" events), and are asked for
+  /// again after a reconnect.
+  final _watchedPosts = <int, int>{};
+  Set<int> get watchedPosts => Set.unmodifiable(_watchedPosts.keys);
+
+  /// A comments sheet for [postId] opened: send its changes here.
+  void watchPost(int postId) {
+    final count = _watchedPosts[postId] ?? 0;
+    _watchedPosts[postId] = count + 1;
+    if (count == 0) _send({'type': 'watch_post', 'postId': postId});
+  }
+
+  /// It closed; the last one to close stops the changes.
+  void unwatchPost(int postId) {
+    final count = _watchedPosts[postId];
+    if (count == null) return;
+    if (count > 1) {
+      _watchedPosts[postId] = count - 1;
+      return;
+    }
+    _watchedPosts.remove(postId);
+    _send({'type': 'unwatch_post', 'postId': postId});
+  }
+
+  /// Best effort: if not connected now, the reconnect sends the watches anyway.
+  void _send(Map<String, Object?> message) {
+    try {
+      _channel?.sink.add(jsonEncode(message));
+    } catch (_) {}
+  }
+
   /// Wait before retry number [attempt]: 1s, 2s, 4s, ... capped at 30s.
   static Duration retryDelay(int attempt) {
     final seconds = 1 << attempt.clamp(0, 5);
@@ -77,6 +110,10 @@ class AppSocket {
       (_) {
         if (_closed || _channel != channel) return;
         _attempt = 0;
+        // A new connection starts with no watches on the server: ask again.
+        for (final postId in _watchedPosts.keys) {
+          _send({'type': 'watch_post', 'postId': postId});
+        }
         if (_hasConnectedBefore) _controller.add(const {'type': 'reconnected'});
         _hasConnectedBefore = true;
       },

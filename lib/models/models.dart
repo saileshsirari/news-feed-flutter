@@ -133,13 +133,27 @@ class Post {
 }
 
 /// A comment on a post.
+/// A comment on a post, in a thread: replies point at their [parentId], and
+/// [path] orders the whole thread for reading (each comment, then its
+/// replies). See the server's schema.sql for how paths are made.
 class PostComment {
   final int id;
   final int postId;
+  final int? parentId;
   final int authorId;
   final String authorUsername;
   final String body;
   final int createdAt;
+  final String path;
+
+  /// 0 for a comment on the post, 1 for a reply, and so on.
+  final int depth;
+
+  /// Direct replies.
+  final int replyCount;
+
+  /// Deleted, but kept as "[deleted]" because it has replies.
+  final bool deleted;
 
   PostComment({
     required this.id,
@@ -148,15 +162,39 @@ class PostComment {
     required this.authorUsername,
     required this.body,
     required this.createdAt,
-  });
+    this.parentId,
+    String? path,
+    this.depth = 0,
+    this.replyCount = 0,
+    this.deleted = false,
+  }) : path = path ?? '';
 
   factory PostComment.fromJson(Map<String, dynamic> json) => PostComment(
         id: json['id'] as int,
         postId: json['post_id'] as int,
+        parentId: json['parent_id'] as int?,
         authorId: json['author_id'] as int,
         authorUsername: json['author_username'] as String,
         body: json['body'] as String,
         createdAt: json['created_at'] as int,
+        path: json['path'] as String?,
+        depth: json['depth'] as int? ?? 0,
+        replyCount: json['reply_count'] as int? ?? 0,
+        deleted: json['deleted'] as bool? ?? false,
+      );
+
+  PostComment copyWith({int? replyCount, bool? deleted}) => PostComment(
+        id: id,
+        postId: postId,
+        parentId: parentId,
+        authorId: deleted == true ? 0 : authorId,
+        authorUsername: deleted == true ? '' : authorUsername,
+        body: deleted == true ? '' : body,
+        createdAt: createdAt,
+        path: path,
+        depth: depth,
+        replyCount: replyCount ?? this.replyCount,
+        deleted: deleted ?? this.deleted,
       );
 }
 

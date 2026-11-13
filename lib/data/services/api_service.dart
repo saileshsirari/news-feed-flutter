@@ -79,8 +79,17 @@ class ApiService {
   }
 
   /// Oldest first; pass the returned cursor for the next page.
-  Future<({List<PostComment> comments, String? nextCursor})> getComments(int postId, int userId, {String? cursor}) async {
-    final res = await _http.get(_uri('/posts/$postId/comments', {'userId': userId, 'cursor': ?cursor}));
+  /// A page of a post's comments in reading order, three levels deep; with
+  /// [under], that comment's own thread ("Continue this thread").
+  Future<({List<PostComment> comments, String? nextCursor})> getComments(
+    int postId,
+    int userId, {
+    String? cursor,
+    int? under,
+  }) async {
+    final res = await _http.get(
+      _uri('/posts/$postId/comments', {'userId': userId, 'cursor': ?cursor, 'under': ?under}),
+    );
     final json = _decodeObject(res);
     return (
       comments: [for (final c in json['comments'] as List) PostComment.fromJson(c as Map<String, dynamic>)],
@@ -88,11 +97,12 @@ class ApiService {
     );
   }
 
-  Future<PostComment> addComment(int postId, {required int userId, required String body}) async {
+  /// A comment on the post, or with [parentId], a reply.
+  Future<PostComment> addComment(int postId, {required int userId, required String body, int? parentId}) async {
     final res = await _http.post(
       _uri('/posts/$postId/comments'),
       headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({'userId': userId, 'body': body}),
+      body: jsonEncode({'userId': userId, 'body': body, 'parentId': ?parentId}),
     );
     return PostComment.fromJson(_decodeObject(res));
   }
