@@ -94,7 +94,7 @@ class CommentsSheet extends ConsumerWidget {
                           key: ValueKey(c.id),
                           comment: c,
                           indent: vm.indentOf(c),
-                          canDelete: !c.deleted && (c.authorId == me || post.authorId == me),
+                          canDelete: !c.deleted && (c.authorId == me || post.authorId == me || post.canModerate),
                           continues: vm.continuesElsewhere(c),
                           onReply: () => notifier.startReply(c),
                           onDelete: () => notifier.delete(c),

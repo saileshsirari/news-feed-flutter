@@ -8,10 +8,12 @@ import 'communities_providers.dart';
 import 'community.dart';
 import 'community_members_screen.dart';
 import 'edit_community_screen.dart';
+import '../feed/compose_post_dialog.dart';
+import '../feed/post_card.dart';
 
 /// One community: who it's for, how many are in it, and your part in it
 /// (join, requested, leave). The owner edits or deletes it; moderators see
-/// join requests. Its posts and chat come in the next phases.
+/// join requests. Members post here; its chat comes in the next phase.
 class CommunityScreen extends ConsumerWidget {
   const CommunityScreen({super.key, required this.communityId});
 
@@ -46,7 +48,7 @@ class CommunityScreen extends ConsumerWidget {
       body: switch (community) {
         AsyncData(:final value) => RefreshIndicator(
             onRefresh: () => ref.refresh(communityProvider(communityId).future),
-            child: ListView(children: [_Header(value), _Sections(value)]),
+            child: ListView(children: [_Header(value), _Sections(value), _Posts(value)]),
           ),
         AsyncError() => Center(
             child: Column(
@@ -213,6 +215,99 @@ class _Sections extends StatelessWidget {
             trailing: const Icon(Icons.chevron_right),
             onTap: () => CommunityMembersScreen.open(context, c, MembershipStatus.banned),
           ),
+      ],
+    );
+  }
+}
+
+/// The community's posts: members write them; anyone who can see the
+/// community reads them; its moderators can remove any.
+class _Posts extends ConsumerWidget {
+  const _Posts(this.community);
+  final Community community;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c = community;
+    final textTheme = Theme.of(context).textTheme;
+    if (c.isPrivate && !c.isMember) {
+      return const Padding(
+        padding: EdgeInsets.all(24),
+        child: Center(child: Text('Posts in a private community are for its members.')),
+      );
+    }
+    final posts = ref.watch(communityPostsProvider(c.id));
+    final notifier = ref.read(communityPostsProvider(c.id).notifier);
+
+    Future<void> act(Future<void> Function() action, String failed) async {
+      try {
+        await action();
+      } catch (_) {
+        if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(failed)));
+      }
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const Divider(),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 4, 8, 4),
+          child: Row(
+            children: [
+              Expanded(child: Text('Posts', style: textTheme.titleMedium)),
+              if (c.isMember)
+                FilledButton.tonalIcon(
+                  icon: const Icon(Icons.edit_outlined, size: 18),
+                  label: const Text('Write a post'),
+                  onPressed: () => showComposePostDialog(
+                    context,
+                    // Its own draft, so files picked for the feed don't show up here.
+                    draftKey: (id: 'community:${c.id}', maxItems: 10, sealed: false),
+                    title: 'Post in ${c.name}',
+                    onPost: (body, mediaIds) => act(() => notifier.publish(body, mediaIds), 'Couldn\'t post. Try again.'),
+                  ),
+                ),
+            ],
+          ),
+        ),
+        ...switch (posts) {
+          AsyncData(:final value) when value.items.isEmpty => [
+              Padding(
+                padding: const EdgeInsets.all(24),
+                child: Center(child: Text(c.isMember ? 'No posts yet. Write the first one!' : 'No posts yet.')),
+              ),
+            ],
+          AsyncData(:final value) => [
+              for (final post in value.items) ...[
+                PostCard(
+                  post,
+                  showCommunity: false,
+                  onLike: () => c.isMember
+                      ? notifier.toggleLike(post.id)
+                      : ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Join the community to like and comment.')),
+                        ),
+                  onCommentCount: (count) => notifier.setCommentCount(post.id, count),
+                  onDelete: () => act(() => notifier.delete(post.id), 'Couldn\'t delete it. Try again.'),
+                ),
+                const Divider(height: 1),
+              ],
+              if (value.hasMore)
+                Center(
+                  child: TextButton(onPressed: notifier.loadMore, child: const Text('Load more')),
+                ),
+            ],
+          AsyncError() => [
+              Center(
+                child: TextButton(
+                  onPressed: () => ref.invalidate(communityPostsProvider(c.id)),
+                  child: const Text('Couldn\'t load posts. Try again'),
+                ),
+              ),
+            ],
+          _ => [const Padding(padding: EdgeInsets.all(24), child: Center(child: CircularProgressIndicator()))],
+        },
       ],
     );
   }

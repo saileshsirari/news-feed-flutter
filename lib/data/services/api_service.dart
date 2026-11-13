@@ -305,17 +305,30 @@ class ApiService {
   }
 
   /// [mediaIds] come from a ready MediaDraftState, in display order.
+  /// A post to your followers, or with [communityId], into that community.
   Future<CreatePostResponse> createPost({
     required int authorId,
     required String body,
     List<int> mediaIds = const [],
+    int? communityId,
   }) async {
     final res = await _http.post(
       _uri('/posts'),
       headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({'authorId': authorId, 'body': body, if (mediaIds.isNotEmpty) 'mediaIds': mediaIds}),
+      body: jsonEncode({
+        'authorId': authorId,
+        'body': body,
+        if (mediaIds.isNotEmpty) 'mediaIds': mediaIds,
+        'communityId': ?communityId,
+      }),
     );
     return CreatePostResponse.fromJson(_decodeObject(res));
+  }
+
+  /// Deletes a post (yours, or one in a community you moderate).
+  Future<void> deletePost(int postId, {required int userId}) async {
+    final res = await _http.delete(_uri('/posts/$postId', {'userId': userId}));
+    if (res.statusCode >= 400) throw ApiException(res.statusCode, res.body);
   }
 
   Future<FeedPage> getFeed(int userId, {int limit = 20, String? cursor}) async {

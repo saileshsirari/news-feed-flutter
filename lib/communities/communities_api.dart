@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 import '../config/app_config.dart';
 import '../data/services/api_service.dart' show ApiException;
 import '../data/services/service_providers.dart';
+import '../models/models.dart';
 import '../session/current_user_provider.dart';
 import 'community.dart';
 
@@ -106,6 +107,10 @@ class CommunitiesApi {
       nextCursor: json['nextCursor'] as String?,
     );
   }
+
+  /// The community's posts, newest first.
+  Future<FeedPage> posts(int id, {String? cursor}) async =>
+      FeedPage.fromJson((await _send('GET', _uri('/communities/$id/posts', {'cursor': cursor})))! as Map<String, dynamic>);
 
   Future<void> approve(int id, int memberId) => _send('POST', _uri('/communities/$id/members/$memberId/approve'));
 

@@ -104,6 +104,20 @@ class ProfileNotifier extends AsyncNotifier<ProfileState> {
     if (post != null) _replace(post.copyWith(commentCount: count));
   }
 
+  Future<void> deletePost(int postId) async {
+    try {
+      await ref.read(apiServiceProvider).deletePost(postId, userId: _viewerId);
+      if (!ref.mounted) return;
+      final current = state.requireValue;
+      state = AsyncData(current.copyWith(
+        posts: [for (final p in current.posts) if (p.id != postId) p],
+        user: current.user,
+      ));
+    } catch (_) {
+      if (ref.mounted) state = AsyncData(state.requireValue.copyWith(error: () => 'Couldn\'t delete that post'));
+    }
+  }
+
   void dismissError() {
     final current = state.value;
     if (current?.error != null) state = AsyncData(current!.copyWith(error: () => null));

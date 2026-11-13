@@ -216,6 +216,18 @@ class FeedNotifier extends Notifier<FeedState> {
     }
   }
 
+  /// Deletes [postId] (yours, or one you moderate) and takes it off the feed.
+  Future<void> deletePost(int postId) async {
+    try {
+      await ref.read(apiServiceProvider).deletePost(postId, userId: _userId);
+      if (!ref.mounted) return;
+      _unconfirmedOwnPosts.removeWhere((p) => p.id == postId);
+      state = state.copyWith(posts: [for (final p in state.posts) if (p.id != postId) p]);
+    } catch (e) {
+      if (ref.mounted) state = state.copyWith(error: 'Couldn\'t delete: $e');
+    }
+  }
+
   void dismissFanoutMessage() {
     state = state.copyWith(fanoutMessage: null);
   }

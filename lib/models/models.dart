@@ -67,6 +67,21 @@ class User {
       );
 }
 
+/// Where a post was posted, for "in Bangalore Runners".
+class PostCommunity {
+  const PostCommunity({required this.id, required this.name, required this.slug});
+
+  static PostCommunity? fromJson(Object? json) => switch (json) {
+        {'id': final int id, 'name': final String name, 'slug': final String slug} =>
+          PostCommunity(id: id, name: name, slug: slug),
+        _ => null,
+      };
+
+  final int id;
+  final String name;
+  final String slug;
+}
+
 class Post {
   final int id;
   final int authorId;
@@ -87,6 +102,12 @@ class Post {
   /// Whether the signed-in user liked it.
   final bool likedByMe;
 
+  /// The community it was posted in; null for an ordinary post.
+  final PostCommunity? community;
+
+  /// The signed-in user moderates its community: may remove it and its comments.
+  final bool canModerate;
+
   Post({
     required this.id,
     required this.authorId,
@@ -99,7 +120,12 @@ class Post {
     this.likeCount = 0,
     this.commentCount = 0,
     this.likedByMe = false,
+    this.community,
+    this.canModerate = false,
   });
+
+  /// Whether [userId] may delete it: its author, or a moderator of its community.
+  bool canBeDeletedBy(int? userId) => userId == authorId || canModerate;
 
   factory Post.fromJson(Map<String, dynamic> json) => Post(
         id: json['id'] as int,
@@ -115,6 +141,8 @@ class Post {
         likeCount: json['like_count'] as int? ?? 0,
         commentCount: json['comment_count'] as int? ?? 0,
         likedByMe: json['liked_by_me'] as bool? ?? false,
+        community: PostCommunity.fromJson(json['community']),
+        canModerate: json['can_moderate'] as bool? ?? false,
       );
 
   Post copyWith({int? likeCount, int? commentCount, bool? likedByMe}) => Post(
@@ -129,6 +157,8 @@ class Post {
         likeCount: likeCount ?? this.likeCount,
         commentCount: commentCount ?? this.commentCount,
         likedByMe: likedByMe ?? this.likedByMe,
+        community: community,
+        canModerate: canModerate,
       );
 }
 

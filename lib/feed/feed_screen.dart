@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:shared_media/shared_media.dart';
 import '../session/current_user_provider.dart';
 import '../settings/settings_screen.dart';
 import 'feed_notifier.dart';
+import 'compose_post_dialog.dart';
 import 'post_card.dart';
 import '../profile/profile_screen.dart';
 
@@ -74,7 +74,14 @@ class FeedScreen extends ConsumerWidget {
         ],
       ),
       floatingActionButton: FloatingActionButton(
-        onPressed: () => _showComposeDialog(context, vm, notifier),
+        onPressed: vm.isPosting
+            ? null
+            : () => showComposePostDialog(
+                  context,
+                  draftKey: _composeDraft,
+                  hint: 'Watch the snackbar after posting — that\'s the fanout cost.',
+                  onPost: (body, mediaIds) => notifier.publishPost(body, mediaIds: mediaIds),
+                ),
         child: const Icon(Icons.add),
       ),
       body: Column(
@@ -110,6 +117,7 @@ class FeedScreen extends ConsumerWidget {
                     post,
                     onLike: () => notifier.toggleLike(post.id),
                     onCommentCount: (count) => notifier.setCommentCount(post.id, count),
+                    onDelete: () => notifier.deletePost(post.id),
                   );
                 }
                 return Padding(
@@ -129,81 +137,6 @@ class FeedScreen extends ConsumerWidget {
           ),
         ],
       ),
-    );
-  }
-
-  void _showComposeDialog(BuildContext context, FeedState vm, FeedNotifier notifier) {
-    final controller = TextEditingController();
-    showDialog(
-      context: context,
-      builder: (dialogContext) => _ComposePostDialog(
-        isPosting: vm.isPosting,
-        controller: controller,
-        onPost: (body, mediaIds) {
-          notifier.publishPost(body, mediaIds: mediaIds);
-          Navigator.of(dialogContext).pop();
-        },
-      ),
-    );
-  }
-}
-
-class _ComposePostDialog extends ConsumerStatefulWidget {
-  final bool isPosting;
-  final TextEditingController controller;
-  final void Function(String body, List<int> mediaIds) onPost;
-
-  const _ComposePostDialog({required this.isPosting, required this.controller, required this.onPost});
-
-  @override
-  ConsumerState<_ComposePostDialog> createState() => _ComposePostDialogState();
-}
-
-class _ComposePostDialogState extends ConsumerState<_ComposePostDialog> {
-  @override
-  Widget build(BuildContext context) {
-    // Watching keeps the draft alive while the dialog is open; closing the
-    // dialog (posting or cancelling) disposes it.
-    final draft = ref.watch(mediaDraftProvider(_composeDraft));
-    final mediaIds = draft.mediaIds; // null while anything is uploading or failed
-    final hasContent = widget.controller.text.trim().isNotEmpty || draft.items.isNotEmpty;
-
-    return AlertDialog(
-      title: const Text('New post'),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          TextField(
-            controller: widget.controller,
-            maxLines: 4,
-            decoration: const InputDecoration(labelText: "What's happening?", border: OutlineInputBorder()),
-            onChanged: (_) => setState(() {}),
-          ),
-          const SizedBox(height: 8),
-          const ComposerAttachments(draftKey: _composeDraft),
-          const Padding(
-            padding: EdgeInsets.only(top: 8),
-            child: Text('Watch the snackbar after posting — that\'s the fanout cost.'),
-          ),
-        ],
-      ),
-      actions: [
-        const AddMediaButton(draftKey: _composeDraft),
-        TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Cancel')),
-        FilledButton(
-          onPressed: widget.isPosting || !hasContent || mediaIds == null
-              ? null
-              : () => widget.onPost(widget.controller.text, mediaIds),
-          child: Text(widget.isPosting
-              ? 'Posting…'
-              : draft.isPreparing
-                  ? 'Compressing…'
-                  : draft.isUploading
-                      ? 'Uploading…'
-                      : 'Post'),
-        ),
-      ],
     );
   }
 }

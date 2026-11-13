@@ -57,6 +57,7 @@ void main() {
             headers: {'content-type': 'application/json; charset=utf-8'});
         final path = request.url.path;
         if (path == '/communities/9' && request.method == 'GET') return json(served);
+        if (path == '/communities/9/posts') return json({'posts': [], 'nextCursor': null});
         if (path == '/communities/9/join') {
           return json(community(
             visibility: served['visibility'] as String,

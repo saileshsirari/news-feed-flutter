@@ -48,6 +48,7 @@ class ProfileScreen extends ConsumerWidget {
                   linkToAuthor: false,
                   onLike: () => notifier.toggleLike(post.id),
                   onCommentCount: (count) => notifier.setCommentCount(post.id, count),
+                  onDelete: () => notifier.deletePost(post.id),
                 );
               }
               return Padding(

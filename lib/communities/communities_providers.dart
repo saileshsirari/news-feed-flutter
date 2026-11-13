@@ -1,5 +1,8 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../data/services/service_providers.dart';
+import '../models/models.dart';
+import '../session/current_user_provider.dart';
 import 'communities_api.dart';
 import 'community.dart';
 
@@ -103,8 +106,9 @@ class CommunityNotifier extends AsyncNotifier<Community> {
     final updated = await action();
     if (!ref.mounted) return;
     state = AsyncData(updated);
-    // Your list of communities changed too.
+    // Your list of communities changed too, and which posts you can see here.
     ref.invalidate(joinedCommunitiesProvider);
+    ref.invalidate(communityPostsProvider(id));
   }
 }
 
@@ -163,3 +167,62 @@ final communityMembersProvider = AsyncNotifierProvider.autoDispose
     .family<MembersNotifier, PagedList<CommunityMember>, ({int communityId, MembershipStatus status})>(
   MembersNotifier.new,
 );
+
+/// A community's posts, newest first, with what members can do to them.
+class CommunityPostsNotifier extends AsyncNotifier<PagedList<Post>> with _Paging<Post> {
+  CommunityPostsNotifier(this.communityId);
+  final int communityId;
+
+  int get _me => ref.read(currentUserProvider).requireValue!.id;
+
+  @override
+  Future<CommunityPage<Post>> fetch(String? cursor) async {
+    final page = await ref.read(communitiesApiProvider).posts(communityId, cursor: cursor);
+    return (items: page.posts, nextCursor: page.nextCursor);
+  }
+
+  @override
+  Future<PagedList<Post>> build() {
+    ref.watch(communitiesApiProvider);
+    return firstPage();
+  }
+
+  /// Posts in this community; shown at the top straight away.
+  Future<void> publish(String body, List<int> mediaIds) async {
+    final response = await ref
+        .read(apiServiceProvider)
+        .createPost(authorId: _me, body: body.trim(), mediaIds: mediaIds, communityId: communityId);
+    if (ref.mounted) edit((items) => [response.post, ...items]);
+  }
+
+  Future<void> toggleLike(int postId) async {
+    final before = _find(postId);
+    if (before == null) return;
+    final liked = !before.likedByMe;
+    _replace(before.copyWith(likedByMe: liked, likeCount: (before.likeCount + (liked ? 1 : -1)).clamp(0, 1 << 30)));
+    try {
+      final count = await ref.read(apiServiceProvider).likePost(postId, userId: _me, liked: liked);
+      final now = _find(postId);
+      if (ref.mounted && now != null) _replace(now.copyWith(likeCount: count));
+    } catch (_) {
+      if (ref.mounted) _replace(before);
+    }
+  }
+
+  void setCommentCount(int postId, int count) {
+    final post = _find(postId);
+    if (post != null) _replace(post.copyWith(commentCount: count));
+  }
+
+  /// Yours, or (moderators) anyone's.
+  Future<void> delete(int postId) async {
+    await ref.read(apiServiceProvider).deletePost(postId, userId: _me);
+    if (ref.mounted) edit((items) => [for (final p in items) if (p.id != postId) p]);
+  }
+
+  Post? _find(int postId) => state.value?.items.where((p) => p.id == postId).firstOrNull;
+  void _replace(Post post) => edit((items) => [for (final p in items) p.id == post.id ? post : p]);
+}
+
+final communityPostsProvider =
+    AsyncNotifierProvider.autoDispose.family<CommunityPostsNotifier, PagedList<Post>, int>(CommunityPostsNotifier.new);
