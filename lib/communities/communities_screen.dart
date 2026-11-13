@@ -9,6 +9,9 @@ import 'community.dart';
 import 'community_screen.dart';
 import 'edit_community_screen.dart';
 import 'join_with_invite.dart';
+import '../events/event.dart';
+import '../events/event_tile.dart';
+import '../events/events_providers.dart';
 
 /// The Communities tab: yours first, then the biggest ones to discover, or
 /// search results while you type.
@@ -51,6 +54,8 @@ class _CommunitiesScreenState extends ConsumerState<CommunitiesScreen> {
         );
 
     final yours = joined?.value?.items ?? const <Community>[];
+    // Coming up across your communities (only while not searching).
+    final upcoming = _query.isEmpty ? ref.watch(upcomingEventsProvider).value?.items ?? const <Event>[] : const <Event>[];
     final found = discover.value;
 
     return Scaffold(
@@ -85,12 +90,17 @@ class _CommunitiesScreenState extends ConsumerState<CommunitiesScreen> {
       body: RefreshIndicator(
         onRefresh: () async {
           ref.invalidate(joinedCommunitiesProvider);
+          ref.invalidate(upcomingEventsProvider);
           ref.invalidate(discoverCommunitiesProvider(_query));
           await ref.read(discoverCommunitiesProvider(_query).future);
         },
         child: ListView(
           padding: const EdgeInsets.only(bottom: 88),
           children: [
+            if (upcoming.isNotEmpty) ...[
+              header('Upcoming events'),
+              for (final e in upcoming.take(5)) EventTile(e, showCommunity: true),
+            ],
             if (yours.isNotEmpty) ...[
               header('Your communities'),
               for (final c in yours) CommunityTile(c),

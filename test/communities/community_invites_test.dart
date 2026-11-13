@@ -43,6 +43,7 @@ void main() {
         http.Response json(Object? body, [int status = 200]) => http.Response.bytes(utf8.encode(jsonEncode(body)), status,
             headers: {'content-type': 'application/json; charset=utf-8'});
         final path = request.url.path;
+        if (path == '/communities/9/events' || path == '/events/upcoming') return http.Response('{"items": [], "nextCursor": null}', 200);
         if (path == '/invites/Ab3dE5gH9k') {
           return json({'community': community(), 'works': inviteWorks, 'reason': inviteWorks ? null : 'this invite has expired'});
         }

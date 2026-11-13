@@ -3,57 +3,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../data/services/service_providers.dart';
 import '../models/models.dart';
 import '../session/current_user_provider.dart';
+import '../data/paged_list.dart';
 import 'communities_api.dart';
 import 'community.dart';
 
-/// A list that loads a page at a time.
-class PagedList<T> {
-  const PagedList({this.items = const [], this.nextCursor, this.isLoadingMore = false});
-
-  final List<T> items;
-  final String? nextCursor;
-  final bool isLoadingMore;
-
-  bool get hasMore => nextCursor != null;
-
-  PagedList<T> copyWith({List<T>? items, String? Function()? nextCursor, bool? isLoadingMore}) => PagedList(
-        items: items ?? this.items,
-        nextCursor: nextCursor != null ? nextCursor() : this.nextCursor,
-        isLoadingMore: isLoadingMore ?? this.isLoadingMore,
-      );
-}
-
-/// Shared paging: [fetch] gets a page from a cursor (null: the first).
-mixin _Paging<T> on AsyncNotifier<PagedList<T>> {
-  Future<CommunityPage<T>> fetch(String? cursor);
-
-  Future<PagedList<T>> firstPage() async {
-    final page = await fetch(null);
-    return PagedList(items: page.items, nextCursor: page.nextCursor);
-  }
-
-  Future<void> loadMore() async {
-    final current = state.value;
-    if (current == null || !current.hasMore || current.isLoadingMore) return;
-    state = AsyncData(current.copyWith(isLoadingMore: true));
-    try {
-      final page = await fetch(current.nextCursor);
-      if (!ref.mounted) return;
-      state = AsyncData(PagedList(items: [...current.items, ...page.items], nextCursor: page.nextCursor));
-    } catch (_) {
-      if (ref.mounted) state = AsyncData(current.copyWith(isLoadingMore: false));
-    }
-  }
-
-  /// Applies [change] to the loaded items (a join, a removed member) without a reload.
-  void edit(List<T> Function(List<T> items) change) {
-    final current = state.value;
-    if (current != null) state = AsyncData(current.copyWith(items: change(current.items)));
-  }
-}
-
 /// Discovery: biggest first, or matching a search ('' for none).
-class DiscoverNotifier extends AsyncNotifier<PagedList<Community>> with _Paging<Community> {
+class DiscoverNotifier extends AsyncNotifier<PagedList<Community>> with Paging<Community> {
   DiscoverNotifier(this.query);
   final String query;
 
@@ -72,7 +27,7 @@ final discoverCommunitiesProvider =
     AsyncNotifierProvider.autoDispose.family<DiscoverNotifier, PagedList<Community>, String>(DiscoverNotifier.new);
 
 /// The communities you're in.
-class JoinedNotifier extends AsyncNotifier<PagedList<Community>> with _Paging<Community> {
+class JoinedNotifier extends AsyncNotifier<PagedList<Community>> with Paging<Community> {
   @override
   Future<CommunityPage<Community>> fetch(String? cursor) => ref.read(communitiesApiProvider).joined(cursor: cursor);
 
@@ -116,7 +71,7 @@ final communityProvider =
     AsyncNotifierProvider.autoDispose.family<CommunityNotifier, Community, int>(CommunityNotifier.new);
 
 /// A community's members, join requests or bans.
-class MembersNotifier extends AsyncNotifier<PagedList<CommunityMember>> with _Paging<CommunityMember> {
+class MembersNotifier extends AsyncNotifier<PagedList<CommunityMember>> with Paging<CommunityMember> {
   MembersNotifier(this.key);
   final ({int communityId, MembershipStatus status}) key;
 
@@ -169,7 +124,7 @@ final communityMembersProvider = AsyncNotifierProvider.autoDispose
 );
 
 /// A community's posts, newest first, with what members can do to them.
-class CommunityPostsNotifier extends AsyncNotifier<PagedList<Post>> with _Paging<Post> {
+class CommunityPostsNotifier extends AsyncNotifier<PagedList<Post>> with Paging<Post> {
   CommunityPostsNotifier(this.communityId);
   final int communityId;
 

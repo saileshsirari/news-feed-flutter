@@ -12,6 +12,9 @@ import '../chat/conversation_screen.dart';
 import 'edit_community_screen.dart';
 import '../feed/compose_post_dialog.dart';
 import '../feed/post_card.dart';
+import '../events/edit_event_screen.dart';
+import '../events/event_list.dart';
+import '../events/event_tile.dart';
 
 /// One community: who it's for, how many are in it, and your part in it
 /// (join, requested, leave). The owner edits or deletes it; moderators see
@@ -50,7 +53,7 @@ class CommunityScreen extends ConsumerWidget {
       body: switch (community) {
         AsyncData(:final value) => RefreshIndicator(
             onRefresh: () => ref.refresh(communityProvider(communityId).future),
-            child: ListView(children: [_Header(value), _Sections(value), _Posts(value)]),
+            child: ListView(children: [_Header(value), _Sections(value), _Events(value), _Posts(value)]),
           ),
         AsyncError() => Center(
             child: Column(
@@ -340,6 +343,43 @@ class _Posts extends ConsumerWidget {
             ],
           _ => [const Padding(padding: EdgeInsets.all(24), child: Center(child: CircularProgressIndicator()))],
         },
+      ],
+    );
+  }
+}
+
+/// What's coming up in the community; organisers plan new events here.
+class _Events extends StatelessWidget {
+  const _Events(this.community);
+  final Community community;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = community;
+    if (c.isPrivate && !c.isMember) return const SizedBox.shrink();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const Divider(),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 4, 8, 0),
+          child: Row(
+            children: [
+              Expanded(child: Text('Events', style: Theme.of(context).textTheme.titleMedium)),
+              TextButton(
+                onPressed: () => CommunityEventsScreen.open(context, c.id, past: true),
+                child: const Text('Past'),
+              ),
+              if (c.canModerate)
+                FilledButton.tonalIcon(
+                  icon: const Icon(Icons.add, size: 18),
+                  label: const Text('New event'),
+                  onPressed: () => EditEventScreen.create(context, c.id),
+                ),
+            ],
+          ),
+        ),
+        EventList(communityId: c.id, past: false, shrinkWrap: true),
       ],
     );
   }

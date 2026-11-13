@@ -54,6 +54,7 @@ void main() {
         http.Response json(Object? body, [int status = 200]) => http.Response.bytes(utf8.encode(jsonEncode(body)), status,
             headers: {'content-type': 'application/json; charset=utf-8'});
         final path = request.url.path;
+        if (path == '/communities/9/events' || path == '/events/upcoming') return http.Response('{"items": [], "nextCursor": null}', 200);
         if (path == '/communities/9') return json(served);
         if (path == '/communities/9/posts') return json({'posts': [post(5), post(4, author: 1)], 'nextCursor': null});
         if (path == '/posts' && request.method == 'POST') return json({...post(6, author: 1), 'fanoutMs': 1.0}, 201);
