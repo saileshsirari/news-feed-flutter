@@ -33,6 +33,9 @@ class FakePicker implements MediaPicker {
   int? lastLimit;
 
   @override
+  Future<PickedMedia?> pickPhoto({double maxSide = 1080}) async => null;
+
+  @override
   Future<List<PickedMedia>> pickMedia({required int limit}) async {
     lastLimit = limit;
     return [pngMedia(), pngMedia()];

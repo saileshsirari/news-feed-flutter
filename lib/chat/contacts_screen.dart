@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../follow/follow_button.dart';
 import '../models/models.dart';
+import '../profile/profile_screen.dart';
+import '../profile/user_avatar.dart';
 import 'contacts_notifier.dart';
 import 'conversation_screen.dart';
 
@@ -135,9 +137,15 @@ class _ContactRow extends ConsumerWidget {
     return ListTile(
       leading: vm.selectionMode
           ? Checkbox(value: selected, onChanged: (_) => notifier.toggleSelected(user.id))
-          : CircleAvatar(child: Text(user.username.isNotEmpty ? user.username[0].toUpperCase() : '?')),
-      title: Text('@${user.username}'),
-      subtitle: user.isCelebrity ? const Text('Celebrity') : null,
+          // Their photo opens their profile; the rest of the row opens the chat.
+          : GestureDetector(
+              onTap: () => ProfileScreen.open(context, user.id),
+              child: UserAvatar.of(user),
+            ),
+      title: Text(user.shownName),
+      subtitle: Text(
+        [if (user.displayName != null) '@${user.username}', if (user.isCelebrity) 'Celebrity'].join(' · '),
+      ),
       // Following someone puts their posts in your feed; it's a separate
       // thing from chatting with them, so the button sits beside the row's
       // tap-to-chat rather than replacing it.
@@ -161,7 +169,7 @@ class _ContactRow extends ConsumerWidget {
                 MaterialPageRoute(
                   builder: (_) => ConversationScreen(
                     conversationId: conversationId,
-                    title: '@${user.username}',
+                    title: user.shownName,
                     otherUserId: user.id,
                   ),
                 ),

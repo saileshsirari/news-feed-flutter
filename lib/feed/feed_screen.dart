@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_media/shared_media.dart';
-import '../models/models.dart';
 import '../session/current_user_provider.dart';
 import '../settings/settings_screen.dart';
 import 'feed_notifier.dart';
-import 'comments_sheet.dart';
+import 'post_card.dart';
+import '../profile/profile_screen.dart';
 
-enum _MenuAction { settings, logout }
+enum _MenuAction { profile, settings, logout }
 
 /// The feed's own rule for how many files a post may carry (the server's
 /// MAX_MEDIA_PER_POST); one draft for the compose dialog.
@@ -52,10 +52,15 @@ class FeedScreen extends ConsumerWidget {
           IconButton(icon: const Icon(Icons.refresh), onPressed: notifier.refresh),
           PopupMenuButton<_MenuAction>(
             onSelected: (action) => switch (action) {
+              _MenuAction.profile => ProfileScreen.open(context, vm.user.id),
               _MenuAction.settings => SettingsScreen.open(context),
               _MenuAction.logout => ref.read(currentUserProvider.notifier).logout(),
             },
             itemBuilder: (_) => const [
+              PopupMenuItem(
+                value: _MenuAction.profile,
+                child: ListTile(leading: Icon(Icons.person_outline), title: Text('My profile')),
+              ),
               PopupMenuItem(
                 value: _MenuAction.settings,
                 child: ListTile(leading: Icon(Icons.settings_outlined), title: Text('Settings')),
@@ -99,7 +104,14 @@ class FeedScreen extends ConsumerWidget {
               itemCount: vm.posts.length + 1,
               separatorBuilder: (_, _) => const Divider(height: 1),
               itemBuilder: (context, index) {
-                if (index < vm.posts.length) return _PostRow(vm.posts[index]);
+                if (index < vm.posts.length) {
+                  final post = vm.posts[index];
+                  return PostCard(
+                    post,
+                    onLike: () => notifier.toggleLike(post.id),
+                    onCommentCount: (count) => notifier.setCommentCount(post.id, count),
+                  );
+                }
                 return Padding(
                   padding: const EdgeInsets.all(16),
                   child: Center(
@@ -131,68 +143,6 @@ class FeedScreen extends ConsumerWidget {
           notifier.publishPost(body, mediaIds: mediaIds);
           Navigator.of(dialogContext).pop();
         },
-      ),
-    );
-  }
-}
-
-class _PostRow extends StatelessWidget {
-  final Post post;
-  const _PostRow(this.post);
-
-  @override
-  Widget build(BuildContext context) {
-    final time = DateTime.fromMillisecondsSinceEpoch(post.createdAt);
-    final timeStr = '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}';
-    return Padding(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Text('@${post.authorUsername}', style: Theme.of(context).textTheme.titleSmall),
-              const SizedBox(width: 8),
-              Text(timeStr, style: Theme.of(context).textTheme.bodySmall),
-            ],
-          ),
-          if (post.body.isNotEmpty) Padding(padding: const EdgeInsets.only(top: 4), child: Text(post.body)),
-          if (post.media.isNotEmpty) Padding(padding: const EdgeInsets.only(top: 8), child: MediaGrid(media: post.media)),
-          _PostActions(post),
-        ],
-      ),
-    );
-  }
-}
-
-/// ♡ like and 💬 comments, with their counts.
-class _PostActions extends ConsumerWidget {
-  const _PostActions(this.post);
-  final Post post;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final colors = Theme.of(context).colorScheme;
-    return Padding(
-      padding: const EdgeInsets.only(top: 4),
-      child: Row(
-        children: [
-          TextButton.icon(
-            key: Key('like-${post.id}'),
-            onPressed: () => ref.read(feedProvider.notifier).toggleLike(post.id),
-            icon: Icon(
-              post.likedByMe ? Icons.favorite : Icons.favorite_border,
-              color: post.likedByMe ? Colors.red : colors.onSurfaceVariant,
-            ),
-            label: Text(post.likeCount > 0 ? '${post.likeCount}' : 'Like'),
-          ),
-          TextButton.icon(
-            key: Key('comments-${post.id}'),
-            onPressed: () => showComments(context, post),
-            icon: Icon(Icons.chat_bubble_outline, color: colors.onSurfaceVariant),
-            label: Text(post.commentCount > 0 ? '${post.commentCount}' : 'Comment'),
-          ),
-        ],
       ),
     );
   }

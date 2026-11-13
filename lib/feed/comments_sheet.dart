@@ -7,17 +7,23 @@ import '../session/current_user_provider.dart';
 import 'feed_notifier.dart';
 
 /// A post's comments, oldest first, with a box to add one. You can delete
-/// your own comments, and any comment on your own post.
-Future<void> showComments(BuildContext context, Post post) => showModalBottomSheet<void>(
+/// your own comments, and any comment on your own post. [onCountChanged]
+/// keeps the count under the post right (by default, in the feed).
+Future<void> showComments(BuildContext context, Post post, {ValueChanged<int>? onCountChanged}) =>
+    showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       showDragHandle: true,
-      builder: (_) => FractionallySizedBox(heightFactor: 0.85, child: CommentsSheet(post: post)),
+      builder: (_) => FractionallySizedBox(
+        heightFactor: 0.85,
+        child: CommentsSheet(post: post, onCountChanged: onCountChanged),
+      ),
     );
 
 class CommentsSheet extends ConsumerStatefulWidget {
-  const CommentsSheet({super.key, required this.post});
+  const CommentsSheet({super.key, required this.post, this.onCountChanged});
   final Post post;
+  final ValueChanged<int>? onCountChanged;
 
   @override
   ConsumerState<CommentsSheet> createState() => _CommentsSheetState();
@@ -73,7 +79,12 @@ class _CommentsSheetState extends ConsumerState<CommentsSheet> {
 
   void _setCount(int count) {
     _count = count;
-    ref.read(feedProvider.notifier).setCommentCount(widget.post.id, count);
+    final onCountChanged = widget.onCountChanged;
+    if (onCountChanged != null) {
+      onCountChanged(count);
+    } else {
+      ref.read(feedProvider.notifier).setCommentCount(widget.post.id, count);
+    }
   }
 
   Future<void> _send() async {

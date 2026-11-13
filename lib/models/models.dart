@@ -5,27 +5,65 @@
 
 import 'package:shared_media/shared_media.dart';
 
+/// A profile photo: its media id (what it's cached by, since the link
+/// changes on every load) and a short-lived link to it.
+class ProfilePhoto {
+  const ProfilePhoto({required this.id, required this.url});
+
+  static ProfilePhoto? fromJson(Object? json) => switch (json) {
+        {'id': final int id, 'url': final String url} => ProfilePhoto(id: id, url: Uri.parse(url)),
+        _ => null,
+      };
+
+  final int id;
+  final Uri url;
+}
+
 class User {
   final int id;
+
+  /// The handle (@name): unique, and doesn't change.
   final String username;
   final int createdAt;
   final bool isCelebrity;
+
+  /// The name they chose to show, if any (see [shownName]).
+  final String? displayName;
+  final String? bio;
+  final ProfilePhoto? photo;
+
+  // Counts: only in a full profile (GET /users/:id, /me); zero in lists.
   final int followerCount;
+  final int followingCount;
+  final int postCount;
 
   User({
     required this.id,
     required this.username,
     required this.createdAt,
     required this.isCelebrity,
+    this.displayName,
+    this.bio,
+    this.photo,
     this.followerCount = 0,
+    this.followingCount = 0,
+    this.postCount = 0,
   });
+
+  /// What to call them: their chosen name, or their handle.
+  String get shownName => displayName ?? '@$username';
 
   factory User.fromJson(Map<String, dynamic> json) => User(
         id: json['id'] as int,
         username: json['username'] as String,
         createdAt: json['created_at'] as int,
         isCelebrity: json['is_celebrity'] as bool? ?? false,
+        displayName: json['display_name'] as String?,
+        bio: json['bio'] as String?,
+        photo: ProfilePhoto.fromJson(json['avatar']),
         followerCount: json['followerCount'] as int? ?? 0,
+        followingCount: json['followingCount'] as int? ?? 0,
+        postCount: json['postCount'] as int? ?? 0,
       );
 }
 
@@ -35,6 +73,10 @@ class Post {
   final String body;
   final int createdAt;
   final String authorUsername;
+
+  /// The author's profile name and photo, if they set them.
+  final String? authorDisplayName;
+  final ProfilePhoto? authorPhoto;
 
   /// Images and videos, in the order the author arranged them.
   final List<MediaAttachment> media;
@@ -51,6 +93,8 @@ class Post {
     required this.body,
     required this.createdAt,
     required this.authorUsername,
+    this.authorDisplayName,
+    this.authorPhoto,
     this.media = const [],
     this.likeCount = 0,
     this.commentCount = 0,
@@ -63,6 +107,8 @@ class Post {
         body: json['body'] as String,
         createdAt: json['created_at'] as int,
         authorUsername: json['author_username'] as String,
+        authorDisplayName: json['author_display_name'] as String?,
+        authorPhoto: ProfilePhoto.fromJson(json['author_avatar']),
         media: [
           for (final m in json['media'] as List? ?? const []) MediaAttachment.fromJson(m as Map<String, dynamic>),
         ],
@@ -77,6 +123,8 @@ class Post {
         body: body,
         createdAt: createdAt,
         authorUsername: authorUsername,
+        authorDisplayName: authorDisplayName,
+        authorPhoto: authorPhoto,
         media: media,
         likeCount: likeCount ?? this.likeCount,
         commentCount: commentCount ?? this.commentCount,

@@ -6,6 +6,7 @@ import '../presence/presence_widgets.dart';
 import '../call/call_screen.dart';
 import '../session/current_user_provider.dart';
 import '../models/models.dart';
+import '../profile/profile_screen.dart';
 import 'chat_outbox.dart';
 import 'conversation_notifier.dart';
 import 'message_info_sheet.dart';
@@ -42,6 +43,7 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
   /// chat don't show up in another. Sending hands the draft (and its
   /// uploads) to the outbox, and the composer moves on to a new one.
   int _draftGeneration = 0;
+
   ///
   /// In an encrypted chat, files are encrypted before they're uploaded
   /// (sealed). The key changes when the chat becomes encrypted, so files
@@ -92,23 +94,27 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (vm.isE2e)
-                  const Padding(
-                    padding: EdgeInsets.only(right: 4),
-                    child: Icon(Icons.lock, size: 16, semanticLabel: 'End-to-end encrypted'),
-                  ),
-                Flexible(child: Text(widget.title, overflow: TextOverflow.ellipsis)),
-              ],
-            ),
-            if (widget.otherUserId != null) PresenceSubtitle(userId: widget.otherUserId!),
-          ],
+        // In a 1:1, tapping the name opens their profile.
+        title: GestureDetector(
+          onTap: widget.otherUserId == null ? null : () => ProfileScreen.open(context, widget.otherUserId!),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (vm.isE2e)
+                    const Padding(
+                      padding: EdgeInsets.only(right: 4),
+                      child: Icon(Icons.lock, size: 16, semanticLabel: 'End-to-end encrypted'),
+                    ),
+                  Flexible(child: Text(widget.title, overflow: TextOverflow.ellipsis)),
+                ],
+              ),
+              if (widget.otherUserId != null) PresenceSubtitle(userId: widget.otherUserId!),
+            ],
+          ),
         ),
         actions: [
           if (!vm.isE2e && !vm.isGroup)

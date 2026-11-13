@@ -39,6 +39,36 @@ class ApiService {
   /// Who the access token belongs to (created on first sign-in).
   Future<User> getMe() async => User.fromJson(_decodeObject(await _http.get(_uri('/me'))));
 
+  /// Someone's profile, with their counts.
+  Future<User> getUser(int userId) async => User.fromJson(_decodeObject(await _http.get(_uri('/users/$userId'))));
+
+  /// Someone's posts, newest first; pass the returned cursor for the next page.
+  Future<FeedPage> getUserPosts(int authorId, {required int viewerId, String? cursor}) async {
+    final res = await _http.get(_uri('/users/$authorId/posts', {'userId': viewerId, 'cursor': ?cursor}));
+    return FeedPage.fromJson(_decodeObject(res));
+  }
+
+  /// Changes your own profile; only what's given changes. A blank
+  /// [displayName] or [bio] clears it. [photoMediaId]: an uploaded image to
+  /// use, or with [removePhoto], none.
+  Future<User> updateProfile({
+    required int userId,
+    String? displayName,
+    String? bio,
+    int? photoMediaId,
+    bool removePhoto = false,
+  }) async {
+    final request = http.Request('PATCH', _uri('/me/profile'))
+      ..headers['Content-Type'] = 'application/json'
+      ..body = jsonEncode({
+        'userId': userId,
+        'displayName': ?displayName,
+        'bio': ?bio,
+        if (removePhoto) 'avatarMediaId': null else 'avatarMediaId': ?photoMediaId,
+      });
+    return User.fromJson(_decodeObject(await http.Response.fromStream(await _http.send(request))));
+  }
+
   /// Likes (or with [liked] false, unlikes) a post; returns the new count.
   Future<int> likePost(int postId, {required int userId, required bool liked}) async {
     final request = http.Request(liked ? 'PUT' : 'DELETE', _uri('/posts/$postId/like', {'userId': userId}))

@@ -42,6 +42,19 @@ class MediaPicker {
     return picked;
   }
 
+  /// One photo (a profile picture, say), at most [maxSide] on its longer
+  /// side; null if the user cancelled.
+  Future<PickedMedia?> pickPhoto({double maxSide = 1080}) async {
+    final file = await _picker.pickImage(
+      source: ImageSource.gallery,
+      maxWidth: maxSide,
+      maxHeight: maxSide,
+      imageQuality: jpegQuality,
+    );
+    if (file == null) return null;
+    return _image(file, contentTypeFor(file.name, file.mimeType));
+  }
+
   static Future<PickedMedia> _image(XFile file, String contentType) async {
     final bytes = await file.readAsBytes();
     final size = await _imageSize(bytes);
