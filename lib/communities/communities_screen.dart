@@ -8,6 +8,7 @@ import 'communities_providers.dart';
 import 'community.dart';
 import 'community_screen.dart';
 import 'edit_community_screen.dart';
+import 'join_with_invite.dart';
 
 /// The Communities tab: yours first, then the biggest ones to discover, or
 /// search results while you type.
@@ -55,6 +56,13 @@ class _CommunitiesScreenState extends ConsumerState<CommunitiesScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Communities'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.link),
+            tooltip: 'Join with an invite',
+            onPressed: () => showJoinWithInvite(context),
+          ),
+        ],
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(64),
           child: Padding(

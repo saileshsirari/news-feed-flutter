@@ -75,3 +75,48 @@ class CommunityMember {
 
 /// A page of results and where the next one starts (null: no more).
 typedef CommunityPage<T> = ({List<T> items, String? nextCursor});
+
+/// An invite link's details, for its community's moderators.
+class CommunityInvite {
+  const CommunityInvite({required this.code, required this.uses, this.maxUses, this.expiresAt});
+
+  factory CommunityInvite.fromJson(Map<String, dynamic> json) => CommunityInvite(
+        code: json['code'] as String,
+        uses: json['uses'] as int? ?? 0,
+        maxUses: json['maxUses'] as int?,
+        expiresAt: json['expiresAt'] as int?,
+      );
+
+  final String code;
+  final int uses;
+
+  /// Null: any number of people.
+  final int? maxUses;
+
+  /// Milliseconds since 1970; null: never expires.
+  final int? expiresAt;
+
+  /// The link people open. The app reads the code from it (see [codeFrom]).
+  String link(Uri apiBase) => apiBase.replace(path: '/invite/$code').toString();
+
+  /// The code in a pasted link or code: the last 10 letters and digits.
+  static String? codeFrom(String text) =>
+      RegExp(r'([0-9A-Za-z]{10})\s*$').firstMatch(text.trim().replaceAll(RegExp(r'[/?#]+$'), ''))?.group(1);
+}
+
+/// What an invite leads to, before joining.
+class InvitePreview {
+  const InvitePreview({required this.community, required this.works, this.reason});
+
+  factory InvitePreview.fromJson(Map<String, dynamic> json) => InvitePreview(
+        community: Community.fromJson(json['community'] as Map<String, dynamic>),
+        works: json['works'] as bool,
+        reason: json['reason'] as String?,
+      );
+
+  final Community community;
+  final bool works;
+
+  /// Why not ("this invite has expired"), when it doesn't work.
+  final String? reason;
+}

@@ -112,6 +112,33 @@ class CommunitiesApi {
   Future<FeedPage> posts(int id, {String? cursor}) async =>
       FeedPage.fromJson((await _send('GET', _uri('/communities/$id/posts', {'cursor': cursor})))! as Map<String, dynamic>);
 
+  /// Moderators: a link that lets people in, for [expiresInHours] (null:
+  /// for good) and [maxUses] people (null: any number).
+  Future<CommunityInvite> createInvite(int id, {int? expiresInHours, int? maxUses}) async =>
+      CommunityInvite.fromJson((await _send('POST', _uri('/communities/$id/invites'), {
+        'expiresInHours': ?expiresInHours,
+        'maxUses': ?maxUses,
+      }))! as Map<String, dynamic>);
+
+  /// Moderators: the links that still work.
+  Future<List<CommunityInvite>> invites(int id) async => [
+        for (final i in (await _send('GET', _uri('/communities/$id/invites')))! as List)
+          CommunityInvite.fromJson(i as Map<String, dynamic>),
+      ];
+
+  Future<void> revokeInvite(int id, String code) => _send('DELETE', _uri('/communities/$id/invites/$code'));
+
+  Future<InvitePreview> previewInvite(String code) async =>
+      InvitePreview.fromJson((await _send('GET', _uri('/invites/$code')))! as Map<String, dynamic>);
+
+  /// Joins with it: straight in, even a private community.
+  Future<Community> acceptInvite(String code) async =>
+      Community.fromJson((await _send('POST', _uri('/invites/$code/accept')))! as Map<String, dynamic>);
+
+  /// The community's group chat (made the first time a member opens it).
+  Future<int> chat(int id) async =>
+      ((await _send('POST', _uri('/communities/$id/chat')))! as Map<String, dynamic>)['conversationId'] as int;
+
   Future<void> approve(int id, int memberId) => _send('POST', _uri('/communities/$id/members/$memberId/approve'));
 
   /// Owner only: moderator or member.

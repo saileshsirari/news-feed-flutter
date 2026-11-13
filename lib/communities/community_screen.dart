@@ -6,14 +6,16 @@ import '../profile/user_avatar.dart';
 import 'communities_api.dart';
 import 'communities_providers.dart';
 import 'community.dart';
+import 'community_invites_screen.dart';
 import 'community_members_screen.dart';
+import '../chat/conversation_screen.dart';
 import 'edit_community_screen.dart';
 import '../feed/compose_post_dialog.dart';
 import '../feed/post_card.dart';
 
 /// One community: who it's for, how many are in it, and your part in it
 /// (join, requested, leave). The owner edits or deletes it; moderators see
-/// join requests. Members post here; its chat comes in the next phase.
+/// join requests and invite links. Members post here and chat together.
 class CommunityScreen extends ConsumerWidget {
   const CommunityScreen({super.key, required this.communityId});
 
@@ -182,17 +184,40 @@ class _HeaderState extends ConsumerState<_Header> {
 }
 
 /// Members (and, for moderators, join requests and bans).
-class _Sections extends StatelessWidget {
+class _Sections extends ConsumerWidget {
   const _Sections(this.community);
   final Community community;
 
+  /// Opens (and the first time, makes) the community's group chat.
+  Future<void> _openChat(BuildContext context, WidgetRef ref) async {
+    try {
+      final conversationId = await ref.read(communitiesApiProvider).chat(community.id);
+      if (!context.mounted) return;
+      await Navigator.of(context).push(MaterialPageRoute(
+        builder: (_) => ConversationScreen(conversationId: conversationId, title: community.name),
+      ));
+    } catch (_) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Couldn\'t open the chat. Try again.')));
+      }
+    }
+  }
+
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final c = community;
     final canSeeMembers = !c.isPrivate || c.isMember;
     return Column(
       children: [
         const Divider(),
+        if (c.isMember)
+          ListTile(
+            leading: const Icon(Icons.forum_outlined),
+            title: const Text('Chat'),
+            subtitle: const Text('Everyone in the community'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => _openChat(context, ref),
+          ),
         ListTile(
           leading: const Icon(Icons.group_outlined),
           title: const Text('Members'),
@@ -207,6 +232,13 @@ class _Sections extends StatelessWidget {
             title: const Text('Join requests'),
             trailing: const Icon(Icons.chevron_right),
             onTap: () => CommunityMembersScreen.open(context, c, MembershipStatus.pending),
+          ),
+        if (c.canModerate)
+          ListTile(
+            leading: const Icon(Icons.link),
+            title: const Text('Invite links'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => CommunityInvitesScreen.open(context, c),
           ),
         if (c.canModerate)
           ListTile(
