@@ -8,6 +8,7 @@ import 'package:http/testing.dart';
 import 'package:news_feed_flutter/data/services/service_providers.dart';
 import 'package:news_feed_flutter/data/services/socket_provider.dart';
 import 'package:news_feed_flutter/feed/comment_thread.dart';
+import 'package:news_feed_flutter/feed/comments_notifier.dart';
 import 'package:news_feed_flutter/feed/comments_sheet.dart';
 import 'package:news_feed_flutter/models/models.dart';
 import 'package:news_feed_flutter/session/current_user_provider.dart';
@@ -90,6 +91,77 @@ void main() {
     });
   });
 
+  group('the comments logic, without any widgets', () {
+    late FakeSocket socket;
+    late ProviderContainer container;
+    final post = Post(id: 50, authorId: 9, body: 'p', createdAt: 1, authorUsername: 'author', commentCount: 2);
+    final key = CommentsKey(post);
+
+    setUp(() async {
+      SharedPreferences.setMockInitialValues({'id': 1, 'username': 'me', 'followerCount': 0});
+      socket = FakeSocket();
+      final client = MockClient((request) async {
+        if (request.method == 'POST') {
+          return http.Response(jsonEncode(c(20, '0003', 'mine', author: 1)), 201);
+        }
+        return http.Response(
+          jsonEncode({
+            'comments': [c(1, '0001', 'first'), c(2, '0002', 'second')],
+            'nextCursor': null,
+          }),
+          200,
+        );
+      });
+      container = ProviderContainer.test(overrides: [
+        apiHttpClientProvider.overrideWithValue(client),
+        socketProvider.overrideWith((ref, userId) => socket),
+      ]);
+      await container.read(currentUserProvider.future);
+    });
+
+    Future<ProviderSubscription<CommentsState>> opened() async {
+      final sub = container.listen(commentsProvider(key), (_, _) {});
+      await Future<void>.delayed(Duration.zero);
+      await Future<void>.delayed(Duration.zero);
+      return sub;
+    }
+
+    test('your own comment shows at once, and its live echo isn\'t counted twice', () async {
+      final sub = await opened();
+      expect(sub.read().comments.map((x) => x.body), ['first', 'second']);
+      expect(await container.read(commentsProvider(key).notifier).send('mine'), isTrue);
+      expect((sub.read().comments.last.body, sub.read().count), ('mine', 3));
+
+      // The batch carries yours and someone else's.
+      socket.controller.add({
+        'type': 'post_comments',
+        'postId': 50,
+        'added': [c(20, '0003', 'mine', author: 1), c(21, '0004', 'theirs')],
+        'addedCount': 2,
+      });
+      await Future<void>.delayed(Duration.zero);
+      expect(sub.read().comments.map((x) => x.body), ['first', 'second', 'mine', 'theirs']);
+      expect(sub.read().count, 4);
+    });
+
+    test('watches the post while open, and stops when nothing shows it', () async {
+      final sub = await opened();
+      expect(socket.watchedPosts, {50});
+      sub.close();
+      await Future<void>.delayed(Duration.zero);
+      expect(socket.watchedPosts, isEmpty);
+    });
+
+    test('replying sets and clears who you\'re replying to', () async {
+      final sub = await opened();
+      final notifier = container.read(commentsProvider(key).notifier);
+      notifier.startReply(sub.read().comments.first);
+      expect(sub.read().replyTo?.id, 1);
+      notifier.cancelReply();
+      expect(sub.read().replyTo, isNull);
+    });
+  });
+
   group('the comments sheet', () {
     late FakeSocket socket;
     late List<http.Request> requests;
@@ -141,10 +213,8 @@ void main() {
       expect(find.text('Great post'), findsOneWidget);
       expect(find.text('Me too'), findsOneWidget);
       expect(find.text('Continue this thread (3) →'), findsOneWidget);
+      // Closing stops watching: checked in "watches the post while open, and stops…" above.
       expect(socket.watchedPosts, {50});
-
-      await tester.pumpWidget(const SizedBox());
-      expect(socket.watchedPosts, isEmpty);
     });
 
     testWidgets('a reply goes to the comment you tapped Reply on', (tester) async {
