@@ -3,12 +3,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../call/call_screen.dart';
 import '../chat/conversations_list_screen.dart';
+import '../communities/communities_screen.dart';
 import '../data/services/socket_provider.dart';
 import '../feed/feed_screen.dart';
 import '../session/current_user_provider.dart';
 import '../chat/local/background_sync.dart';
 
-/// Two tabs: the existing feed, and the new chat/contacts list. Only exists
+/// Three tabs: the feed, chats, and communities. Only exists
 /// while someone is logged in (see main.dart's _RootScreen), and both tabs
 /// share that user's one socketProvider connection. Also the one place
 /// that listens for call_started (see chatService.createCallToken) — this
@@ -60,6 +61,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final screens = [
       const FeedScreen(),
       const ConversationsListScreen(),
+      const CommunitiesScreen(),
     ];
 
     return Scaffold(
@@ -70,6 +72,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         destinations: const [
           NavigationDestination(icon: Icon(Icons.home_outlined), selectedIcon: Icon(Icons.home), label: 'Feed'),
           NavigationDestination(icon: Icon(Icons.chat_outlined), selectedIcon: Icon(Icons.chat), label: 'Chat'),
+          NavigationDestination(
+            icon: Icon(Icons.groups_outlined),
+            selectedIcon: Icon(Icons.groups),
+            label: 'Communities',
+          ),
         ],
       ),
     );
