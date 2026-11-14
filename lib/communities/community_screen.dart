@@ -214,6 +214,17 @@ class _Sections extends ConsumerWidget {
       children: [
         const Divider(),
         if (c.isMember)
+          SwitchListTile(
+            secondary: const Icon(Icons.notifications_outlined),
+            title: const Text('Tell me about new events'),
+            value: c.notifyEvents,
+            onChanged: (on) => ref.read(communityProvider(c.id).notifier).setEventNotifications(on).catchError((Object _) {
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Couldn\'t change that. Try again.')));
+              }
+            }),
+          ),
+        if (c.isMember)
           ListTile(
             leading: const Icon(Icons.forum_outlined),
             title: const Text('Chat'),

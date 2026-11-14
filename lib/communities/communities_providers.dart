@@ -52,6 +52,7 @@ class CommunityNotifier extends AsyncNotifier<Community> {
   Future<Community> build() => ref.watch(communitiesApiProvider).get(id);
 
   Future<void> join() => _apply(() => _api.join(id));
+  Future<void> setEventNotifications(bool on) => _apply(() => _api.setEventNotifications(id, on: on));
   Future<void> leave() => _apply(() => _api.leave(id));
 
   /// After an edit or a membership change made elsewhere.

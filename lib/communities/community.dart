@@ -22,6 +22,7 @@ class Community {
     this.photo,
     this.myRole,
     this.myStatus,
+    this.notifyEvents = false,
   });
 
   factory Community.fromJson(Map<String, dynamic> json) => Community(
@@ -34,6 +35,7 @@ class Community {
         memberCount: json['memberCount'] as int? ?? 0,
         myRole: _enumOrNull(CommunityRole.values, json['myRole']),
         myStatus: _enumOrNull(MembershipStatus.values, json['myStatus']),
+        notifyEvents: json['notifyEvents'] as bool? ?? false,
       );
 
   final int id;
@@ -47,6 +49,9 @@ class Community {
   final int memberCount;
   final CommunityRole? myRole;
   final MembershipStatus? myStatus;
+
+  /// You (a member) get a notification when a new event is planned here.
+  final bool notifyEvents;
 
   bool get isPrivate => visibility == CommunityVisibility.private;
   bool get isMember => myStatus == MembershipStatus.active;

@@ -59,6 +59,7 @@ void main() {
         if (path == '/communities/9/events' || path == '/events/upcoming') return http.Response('{"items": [], "nextCursor": null}', 200);
         if (path == '/communities/9' && request.method == 'GET') return json(served);
         if (path == '/communities/9/posts') return json({'posts': [], 'nextCursor': null});
+        if (path == '/communities/9/notifications') return json({...served, 'notifyEvents': true});
         if (path == '/communities/9/join') {
           return json(community(
             visibility: served['visibility'] as String,
@@ -156,6 +157,18 @@ void main() {
     await showCommunity(tester);
     expect(find.text('Ask to join'), findsOneWidget);
     expect(find.text('Only members can see who\'s in it'), findsOneWidget);
+  });
+
+  testWidgets('a member can ask to hear about new events', (tester) async {
+    served = community(myRole: 'member', myStatus: 'active');
+    await showCommunity(tester);
+    final toggle = find.widgetWithText(SwitchListTile, 'Tell me about new events');
+    expect(tester.widget<SwitchListTile>(toggle).value, isFalse);
+    await tester.tap(toggle);
+    await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 20)));
+    await tester.pump();
+    expect(jsonDecode(requests.lastWhere((r) => r.method == 'PUT').body), {'events': true});
+    expect(tester.widget<SwitchListTile>(toggle).value, isTrue);
   });
 
   testWidgets('its owner can edit it and see join requests and bans', (tester) async {

@@ -18,12 +18,16 @@ self.addEventListener('push', (event) => {
     const windows = await clients.matchAll({ type: 'window', includeUncontrolled: true });
     if (windows.some((w) => w.focused && w.visibilityState === 'visible')) return;
     await self.registration.showNotification(data.title || 'News Feed', {
-      body: data.body || 'New message',
-      // One notification per chat, updated rather than piling up.
-      tag: data.conversationId ? `conversation-${data.conversationId}` : undefined,
+      body: data.body || (data.type === 'event' ? 'An event you follow has an update' : 'New message'),
+      // One notification per chat (or per event), updated rather than piling up.
+      tag: data.conversationId
+        ? `conversation-${data.conversationId}`
+        : data.eventId
+          ? `event-${data.eventId}`
+          : undefined,
       renotify: true,
       icon: new URL('../icons/Icon-192.png', self.registration.scope).href,
-      data: { conversationId: data.conversationId },
+      data: { conversationId: data.conversationId, eventId: data.eventId },
     });
   })());
 });

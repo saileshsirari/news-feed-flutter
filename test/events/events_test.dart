@@ -7,7 +7,9 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:news_feed_flutter/data/services/service_providers.dart';
 import 'package:news_feed_flutter/events/event.dart';
+import 'package:news_feed_flutter/events/calendar/add_to_calendar.dart';
 import 'package:news_feed_flutter/events/event_screen.dart';
+import 'package:news_feed_flutter/push/push_setup.dart';
 import 'package:news_feed_flutter/events/events_api.dart';
 import 'package:news_feed_flutter/events/events_providers.dart';
 import 'package:news_feed_flutter/session/current_user_provider.dart';
@@ -106,6 +108,30 @@ void main() {
       'location': {'kind': 'online', 'onlineUrl': 'https://meet.test/x'},
       'capacity': null,
     });
+  });
+
+  test('each kind of event notice says what happened', () {
+    final e = Event.fromJson(event());
+    final notices = {for (final r in ['new', 'changed', 'cancelled', 'promoted', 'reminder_24h', 'reminder_1h']) r: eventNotice(e, r).$1};
+    expect(notices, {
+      'new': 'New event in Runners',
+      'changed': 'Changed: Sunday 10K',
+      'cancelled': 'Cancelled: Sunday 10K',
+      'promoted': 'You\'re in: Sunday 10K',
+      'reminder_24h': 'Coming up: Sunday 10K',
+      'reminder_1h': 'Starting soon: Sunday 10K',
+    });
+    expect(eventNotice(e, 'new').$2, startsWith('Sunday 10K · '));
+    expect(eventNotice(e, 'new').$2, endsWith('Cubbon Park'));
+  });
+
+  test('Add to calendar: a Google Calendar link with the times in UTC and the event\'s zone', () {
+    final url = googleCalendarUrl(Event.fromJson(event()));
+    expect(url.host, 'calendar.google.com');
+    expect(url.queryParameters['dates'], '20261116T003000Z/20261116T023000Z');
+    expect(url.queryParameters['text'], 'Sunday 10K');
+    expect(url.queryParameters['location'], 'Cubbon Park, Bengaluru');
+    expect(url.queryParameters['ctz'], 'Asia/Kolkata');
   });
 
   test('RSVPing updates the event from the server\'s answer', () async {

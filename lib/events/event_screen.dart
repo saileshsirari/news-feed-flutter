@@ -7,6 +7,7 @@ import '../communities/community_screen.dart';
 import '../data/services/api_service.dart';
 import '../profile/profile_screen.dart';
 import '../profile/user_avatar.dart';
+import 'calendar/add_to_calendar.dart';
 import 'edit_event_screen.dart';
 import 'event.dart';
 import 'events_providers.dart';
@@ -194,6 +195,15 @@ class _DetailsState extends ConsumerState<_Details> {
               ),
               const SizedBox(height: 12),
               SizedBox(width: double.infinity, child: rsvp),
+              if (!e.cancelled && !e.past)
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: TextButton.icon(
+                    onPressed: () => showAddToCalendar(context, ref, e),
+                    icon: const Icon(Icons.edit_calendar_outlined),
+                    label: const Text('Add to calendar'),
+                  ),
+                ),
               if (e.description != null) Padding(padding: const EdgeInsets.only(top: 16), child: Text(e.description!)),
             ],
           ),

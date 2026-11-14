@@ -135,6 +135,10 @@ class CommunitiesApi {
   Future<Community> acceptInvite(String code) async =>
       Community.fromJson((await _send('POST', _uri('/invites/$code/accept')))! as Map<String, dynamic>);
 
+  /// Members: a notification when a new event is planned here, or not.
+  Future<Community> setEventNotifications(int id, {required bool on}) async =>
+      Community.fromJson((await _send('PUT', _uri('/communities/$id/notifications'), {'events': on}))! as Map<String, dynamic>);
+
   /// The community's group chat (made the first time a member opens it).
   Future<int> chat(int id) async =>
       ((await _send('POST', _uri('/communities/$id/chat')))! as Map<String, dynamic>)['conversationId'] as int;
