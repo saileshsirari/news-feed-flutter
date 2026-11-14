@@ -1,3 +1,5 @@
+import 'package:geo_kit/geo_kit.dart';
+
 import '../models/models.dart';
 
 enum CommunityVisibility { public, private }
@@ -23,6 +25,8 @@ class Community {
     this.myRole,
     this.myStatus,
     this.notifyEvents = false,
+    this.area,
+    this.distanceKm,
   });
 
   factory Community.fromJson(Map<String, dynamic> json) => Community(
@@ -36,6 +40,8 @@ class Community {
         myRole: _enumOrNull(CommunityRole.values, json['myRole']),
         myStatus: _enumOrNull(MembershipStatus.values, json['myStatus']),
         notifyEvents: json['notifyEvents'] as bool? ?? false,
+        area: json['area'] == null ? null : Place.fromJson(json['area'] as Map<String, dynamic>),
+        distanceKm: (json['distanceKm'] as num?)?.toDouble(),
       );
 
   final int id;
@@ -52,6 +58,13 @@ class Community {
 
   /// You (a member) get a notification when a new event is planned here.
   final bool notifyEvents;
+
+  /// Where it meets, roughly ("Indiranagar, Bengaluru", to about a km);
+  /// null: anywhere.
+  final Place? area;
+
+  /// How far its area is from where you searched ("near me" lists only).
+  final double? distanceKm;
 
   bool get isPrivate => visibility == CommunityVisibility.private;
   bool get isMember => myStatus == MembershipStatus.active;

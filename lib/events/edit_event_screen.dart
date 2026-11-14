@@ -4,10 +4,12 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_timezone/flutter_timezone.dart';
+import 'package:geo_kit/geo_kit.dart';
 import 'package:intl/intl.dart';
 import 'package:shared_media/shared_media.dart';
 
 import '../data/services/api_service.dart';
+import '../geo/geo_services.dart';
 import 'event.dart';
 import 'event_screen.dart';
 import 'events_api.dart';
@@ -50,6 +52,12 @@ class _EditEventScreenState extends ConsumerState<EditEventScreen> {
   late final _capacity = TextEditingController(text: widget.event?.capacity?.toString() ?? '');
 
   late bool _online = widget.event?.isOnline ?? false;
+
+  /// Where on the map, for "events near me" (null: not pinned).
+  late GeoPoint? _point = switch (widget.event) {
+    Event(:final double latitude, :final double longitude) => GeoPoint(latitude, longitude),
+    _ => null,
+  };
   late bool _limited = widget.event?.capacity != null;
   late DateTime _start = widget.event?.localStart ?? _nextHour(DateTime.now().add(const Duration(days: 1)));
   late Duration _length =
@@ -150,6 +158,7 @@ class _EditEventScreenState extends ConsumerState<EditEventScreen> {
         online: _online,
         placeName: _place.text,
         address: _address.text,
+        point: _point,
         onlineUrl: _url.text.trim(),
         capacity: _limited ? int.parse(_capacity.text.trim()) : null,
         coverMediaId: await _coverUpload,
@@ -183,6 +192,25 @@ class _EditEventScreenState extends ConsumerState<EditEventScreen> {
     } on Object {
       return 'Couldn\'t save (${e.statusCode}).';
     }
+  }
+
+  /// Choose the spot; a searched place also fills in the place and address.
+  Future<void> _pinOnMap() async {
+    final point = _point;
+    final place = await pickPlace(
+      context,
+      search: ref.read(placeSearchProvider),
+      tiles: ref.read(mapTilesProvider),
+      location: ref.read(locationSourceProvider),
+      initial: point == null ? null : Place(name: _place.text.trim().isEmpty ? 'Pinned spot' : _place.text.trim(), point: point),
+      title: 'Where is it?',
+    );
+    if (place == null || !mounted) return;
+    setState(() {
+      _point = place.point;
+      if (_place.text.trim().isEmpty && place.name != 'Dropped pin') _place.text = place.name;
+      if (_address.text.trim().isEmpty && place.address != null) _address.text = place.address!;
+    });
   }
 
   @override
@@ -304,6 +332,16 @@ class _EditEventScreenState extends ConsumerState<EditEventScreen> {
               controller: _address,
               maxLength: 300,
               decoration: const InputDecoration(labelText: 'Address (optional)', border: OutlineInputBorder()),
+            ),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: Icon(_point == null ? Icons.add_location_alt_outlined : Icons.location_on),
+              title: Text(_point == null ? 'Pin it on the map' : 'Pinned on the map'),
+              subtitle: Text(_point == null ? 'So people nearby find it, and can get directions.' : 'Tap to move the pin.'),
+              trailing: _point == null
+                  ? null
+                  : IconButton(tooltip: 'Remove pin', icon: const Icon(Icons.close), onPressed: () => setState(() => _point = null)),
+              onTap: _saving ? null : _pinOnMap,
             ),
           ],
           SwitchListTile(

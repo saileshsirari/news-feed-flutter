@@ -1,10 +1,13 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:geo_kit/geo_kit.dart';
 import 'package:shared_media/shared_media.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../communities/community_screen.dart';
 import '../data/services/api_service.dart';
+import '../geo/geo_services.dart';
 import '../profile/profile_screen.dart';
 import '../profile/user_avatar.dart';
 import 'calendar/add_to_calendar.dart';
@@ -183,8 +186,11 @@ class _DetailsState extends ConsumerState<_Details> {
                   e.onlineUrl ?? 'The link shows here once you\'re going.',
                   onTap: e.onlineUrl == null ? null : () => launchUrl(Uri.parse(e.onlineUrl!), mode: LaunchMode.externalApplication),
                 )
-              else
+              else ...[
                 _Row(Icons.place_outlined, e.placeName ?? 'In person', e.address),
+                if (e.latitude != null && e.longitude != null)
+                  _PlacePreview(point: GeoPoint(e.latitude!, e.longitude!), label: e.placeName ?? e.title),
+              ],
               _Row(
                 Icons.group_outlined,
                 e.capacity == null ? '${e.goingCount} going' : '${e.goingCount} of ${e.capacity} going',
@@ -215,6 +221,49 @@ class _DetailsState extends ConsumerState<_Details> {
 
 extension on String {
   String? ifEmpty(String? other) => isEmpty ? other : this;
+}
+
+/// A small still map of where it is, and a way to get there.
+class _PlacePreview extends ConsumerWidget {
+  const _PlacePreview({required this.point, required this.label});
+  final GeoPoint point;
+  final String label;
+
+  /// Android: a geo: link, so the person's own maps app (whichever they
+  /// use) opens. Elsewhere: OpenStreetMap in the browser.
+  Uri get _directions => !kIsWeb && defaultTargetPlatform == TargetPlatform.android
+      ? Uri.parse('geo:${point.lat},${point.lng}?q=${point.lat},${point.lng}(${Uri.encodeComponent(label)})')
+      : Uri.https('www.openstreetmap.org', '/', {'mlat': '${point.lat}', 'mlon': '${point.lng}'}).replace(
+          fragment: 'map=17/${point.lat}/${point.lng}',
+        );
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) => Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: SizedBox(
+              height: 160,
+              child: PlaceMap(
+                tiles: ref.watch(mapTilesProvider),
+                center: point,
+                zoom: 15,
+                interactive: false,
+                pins: [MapPin(point: point, label: label)],
+              ),
+            ),
+          ),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              onPressed: () => launchUrl(_directions, mode: LaunchMode.externalApplication),
+              icon: const Icon(Icons.directions_outlined),
+              label: const Text('Directions'),
+            ),
+          ),
+        ],
+      );
 }
 
 class _Row extends StatelessWidget {

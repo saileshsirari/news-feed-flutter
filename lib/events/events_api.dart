@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
 
+import 'package:geo_kit/geo_kit.dart';
+
 import '../config/app_config.dart';
 import '../data/services/api_service.dart' show ApiException;
 import '../data/services/service_providers.dart';
@@ -24,6 +26,7 @@ class EventDraft {
     this.description,
     this.placeName,
     this.address,
+    this.point,
     this.onlineUrl,
     this.capacity,
     this.coverMediaId,
@@ -37,6 +40,9 @@ class EventDraft {
   final bool online;
   final String? placeName;
   final String? address;
+
+  /// Where on the map (for "events near me"); null: not pinned.
+  final GeoPoint? point;
   final String? onlineUrl;
 
   /// Null: no limit.
@@ -51,7 +57,13 @@ class EventDraft {
         'timeZone': timeZone,
         'location': online
             ? {'kind': 'online', 'onlineUrl': onlineUrl}
-            : {'kind': 'in_person', 'placeName': placeName, 'address': address},
+            : {
+                'kind': 'in_person',
+                'placeName': placeName,
+                'address': address,
+                'latitude': point?.lat,
+                'longitude': point?.lng,
+              },
         'capacity': capacity,
         'coverMediaId': ?coverMediaId,
       };
@@ -115,6 +127,15 @@ class EventsApi {
   /// Coming up across every community you're in.
   Future<EventPage<Event>> upcoming({String? cursor}) async =>
       _events(await _send('GET', _uri('/events/upcoming', {'cursor': cursor})));
+
+  /// Still to come within [radiusKm] of [near], nearest first (each with
+  /// its distanceKm). [near] should already be rounded (geo_kit's
+  /// DeviceLocation does): the server only needs "around here".
+  Future<List<Event>> nearby(GeoPoint near, {double radiusKm = 10}) async => [
+        for (final e in (await _send('GET', _uri('/events/nearby', {'lat': near.lat, 'lng': near.lng, 'radiusKm': radiusKm})))!
+            as List)
+          Event.fromJson(e as Map<String, dynamic>),
+      ];
 
   Future<EventPage<EventAttendee>> attendees(int id, {RsvpStatus status = RsvpStatus.going, String? cursor}) async {
     final json = (await _send('GET', _uri('/events/$id/attendees', {'status': status.name, 'cursor': cursor})))!

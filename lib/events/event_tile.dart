@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:geo_kit/geo_kit.dart';
 import 'package:intl/intl.dart';
 
 import 'event.dart';
@@ -38,6 +39,7 @@ class EventTile extends StatelessWidget {
       subtitle: Text(
         [
           DateFormat('HH:mm').format(e.localStart),
+          if (e.distanceKm != null) formatDistance(e.distanceKm!),
           if (where.isNotEmpty) where,
           if (showCommunity) e.communityName,
         ].join(' · '),

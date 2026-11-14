@@ -35,6 +35,7 @@ class Event {
     this.myWaitlistPosition,
     this.canManage = false,
     this.canRsvp = false,
+    this.distanceKm,
   });
 
   factory Event.fromJson(Map<String, dynamic> json) {
@@ -71,6 +72,7 @@ class Event {
       myWaitlistPosition: json['myWaitlistPosition'] as int?,
       canManage: json['canManage'] as bool? ?? false,
       canRsvp: json['canRsvp'] as bool? ?? false,
+      distanceKm: (json['distanceKm'] as num?)?.toDouble(),
     );
   }
 
@@ -111,6 +113,9 @@ class Event {
   final int? myWaitlistPosition;
   final bool canManage;
   final bool canRsvp;
+
+  /// How far from where you searched ("near me" lists only).
+  final double? distanceKm;
 
   bool get isOnline => locationKind == EventLocationKind.online;
   bool get isFull => spotsLeft == 0;

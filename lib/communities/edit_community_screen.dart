@@ -3,9 +3,11 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:geo_kit/geo_kit.dart';
 import 'package:shared_media/shared_media.dart';
 
 import '../data/services/api_service.dart';
+import '../geo/geo_services.dart';
 import '../profile/user_avatar.dart';
 import 'communities_api.dart';
 import 'communities_providers.dart';
@@ -13,7 +15,8 @@ import 'community.dart';
 import 'community_screen.dart';
 
 /// Creating a community, or (its owner) editing one: photo, name,
-/// description, public or private. The photo uploads as soon as it's picked.
+/// description, public or private, and where it's based (an area, for
+/// "near me"; optional). The photo uploads as soon as it's picked.
 class EditCommunityScreen extends ConsumerStatefulWidget {
   const EditCommunityScreen({super.key, this.community});
 
@@ -39,6 +42,7 @@ class _EditCommunityScreenState extends ConsumerState<EditCommunityScreen> {
   late final _name = TextEditingController(text: widget.community?.name ?? '');
   late final _description = TextEditingController(text: widget.community?.description ?? '');
   late var _visibility = widget.community?.visibility ?? CommunityVisibility.public;
+  late Place? _area = widget.community?.area;
 
   Uint8List? _pickedBytes;
   Future<int>? _upload;
@@ -87,6 +91,7 @@ class _EditCommunityScreenState extends ConsumerState<EditCommunityScreen> {
               description: _description.text,
               visibility: _visibility,
               photoMediaId: photoId,
+              area: _area,
             )
           : await api.update(
               community.id,
@@ -95,6 +100,8 @@ class _EditCommunityScreenState extends ConsumerState<EditCommunityScreen> {
               visibility: _visibility,
               photoMediaId: photoId,
               removePhoto: _removePhoto,
+              area: _area,
+              removeArea: _area == null && community.area != null,
             );
       ref.invalidate(joinedCommunitiesProvider);
       ref.invalidate(discoverCommunitiesProvider);
@@ -116,6 +123,19 @@ class _EditCommunityScreenState extends ConsumerState<EditCommunityScreen> {
     } finally {
       if (mounted) setState(() => _saving = false);
     }
+  }
+
+  Future<void> _pickArea() async {
+    final area = await pickPlace(
+      context,
+      search: ref.read(placeSearchProvider),
+      tiles: ref.read(mapTilesProvider),
+      location: ref.read(locationSourceProvider),
+      initial: _area,
+      areaOnly: true,
+      title: 'Where is it based?',
+    );
+    if (area != null && mounted) setState(() => _area = area);
   }
 
   static String _reason(ApiException e) {
@@ -206,6 +226,21 @@ class _EditCommunityScreenState extends ConsumerState<EditCommunityScreen> {
                   : 'Anyone can find it; people ask to join and a moderator lets them in.',
               style: Theme.of(context).textTheme.bodySmall,
             ),
+          ),
+          const SizedBox(height: 12),
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: const Icon(Icons.place_outlined),
+            title: Text(_area?.name ?? 'Where it\'s based (optional)'),
+            subtitle: Text(
+              _area == null
+                  ? 'An area helps people nearby find it. Leave it empty for an online-only community.'
+                  : 'Shown to everyone, to about a kilometre.',
+            ),
+            trailing: _area == null
+                ? null
+                : IconButton(tooltip: 'Remove area', icon: const Icon(Icons.close), onPressed: () => setState(() => _area = null)),
+            onTap: _saving ? null : _pickArea,
           ),
           if (_error != null)
             Padding(

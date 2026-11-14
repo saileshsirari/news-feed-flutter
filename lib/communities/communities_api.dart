@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
 
+import 'package:geo_kit/geo_kit.dart';
+
 import '../config/app_config.dart';
 import '../data/services/api_service.dart' show ApiException;
 import '../data/services/service_providers.dart';
@@ -61,13 +63,25 @@ class CommunitiesApi {
     String? description,
     required CommunityVisibility visibility,
     int? photoMediaId,
+    Place? area,
   }) async =>
       Community.fromJson((await _send('POST', _uri('/communities'), {
         'name': name,
         'description': description,
         'visibility': visibility.name,
         'photoMediaId': ?photoMediaId,
+        'area': ?_area(area),
       }))! as Map<String, dynamic>);
+
+  static Map<String, Object?>? _area(Place? area) =>
+      area == null ? null : {'name': area.name, 'lat': area.point.lat, 'lng': area.point.lng};
+
+  /// Communities based within [radiusKm] of [near], nearest first.
+  Future<List<Community>> nearby(GeoPoint near, {double radiusKm = 10}) async => [
+        for (final c in (await _send('GET', _uri('/communities/nearby', {'lat': near.lat, 'lng': near.lng, 'radiusKm': radiusKm})))!
+            as List)
+          Community.fromJson(c as Map<String, dynamic>),
+      ];
 
   /// Owner only. Only what's given changes; [removePhoto] clears the photo.
   Future<Community> update(
@@ -77,12 +91,15 @@ class CommunitiesApi {
     CommunityVisibility? visibility,
     int? photoMediaId,
     bool removePhoto = false,
+    Place? area,
+    bool removeArea = false,
   }) async =>
       Community.fromJson((await _send('PATCH', _uri('/communities/$id'), {
         'name': ?name,
         'description': ?description,
         'visibility': ?visibility?.name,
         if (removePhoto) 'photoMediaId': null else 'photoMediaId': ?photoMediaId,
+        if (removeArea) 'area': null else 'area': ?_area(area),
       }))! as Map<String, dynamic>);
 
   Future<void> delete(int id) => _send('DELETE', _uri('/communities/$id'));

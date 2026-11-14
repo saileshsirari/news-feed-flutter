@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:geo_kit/geo_kit.dart';
 
 import '../profile/user_avatar.dart';
 import 'communities_providers.dart';
@@ -12,6 +13,7 @@ import 'join_with_invite.dart';
 import '../events/event.dart';
 import '../events/event_tile.dart';
 import '../events/events_providers.dart';
+import '../geo/nearby_screen.dart';
 
 /// The Communities tab: yours first, then the biggest ones to discover, or
 /// search results while you type.
@@ -62,6 +64,11 @@ class _CommunitiesScreenState extends ConsumerState<CommunitiesScreen> {
       appBar: AppBar(
         title: const Text('Communities'),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.near_me_outlined),
+            tooltip: 'Near me',
+            onPressed: () => NearbyScreen.open(context),
+          ),
           IconButton(
             icon: const Icon(Icons.link),
             tooltip: 'Join with an invite',
@@ -168,7 +175,14 @@ class CommunityTile extends StatelessWidget {
       leading: UserAvatar(name: c.name, photo: c.photo),
       title: Text(c.name, maxLines: 1, overflow: TextOverflow.ellipsis),
       subtitle: Text(
-        '${c.isPrivate ? 'Private' : 'Public'} · ${c.memberCount} ${c.memberCount == 1 ? 'member' : 'members'}',
+        [
+          if (c.distanceKm != null) formatDistance(c.distanceKm!),
+          c.isPrivate ? 'Private' : 'Public',
+          '${c.memberCount} ${c.memberCount == 1 ? 'member' : 'members'}',
+          if (c.area != null) c.area!.name,
+        ].join(' · '),
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
       ),
       trailing: role == null ? null : Text(role, style: Theme.of(context).textTheme.labelMedium),
       onTap: () => CommunityScreen.open(context, c.id),

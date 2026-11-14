@@ -49,6 +49,10 @@ dependencies:
   # End-to-end encryption (MLS through OpenMLS, in Rust).
   mls_crypto:
     path: packages/mls_crypto
+  # Maps, the device's (rounded) location, and a place picker; shared with
+  # any later "near me" app.
+  geo_kit:
+    path: packages/geo_kit
   shared_preferences: ^2.3.3
   # A device's name for the device list ("Pixel 8", "Chrome on macOS").
   device_info_plus: ^13.2.0

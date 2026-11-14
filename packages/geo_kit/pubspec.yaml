@@ -1,0 +1,22 @@
+name: geo_kit
+description: Points, distances, the device's (rounded) location, a map, and a place picker. Shared by any app that needs "near me" (events today; places or rides later).
+publish_to: 'none'
+version: 0.1.0
+
+environment:
+  sdk: ^3.13.4
+
+# Deliberately no dependency on the news_feed_flutter app: an app plugs in
+# its own place search (PlaceSearch) and nothing else.
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_map: ^8.3.2
+  geolocator: ^14.1.2
+  latlong2: ^0.10.1
+  url_launcher: ^6.3.3
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
