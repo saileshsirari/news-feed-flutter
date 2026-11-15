@@ -23,6 +23,7 @@ class EventTile extends StatelessWidget {
     final status = switch (e) {
       Event(cancelled: true) => ('Cancelled', colors.error),
       Event(myRsvp: RsvpStatus.going) => ('Going', colors.primary),
+      Event(myRsvp: RsvpStatus.held) => ('Paying…', colors.tertiary),
       Event(myRsvp: RsvpStatus.waitlist, :final myWaitlistPosition) => ('Waitlist #${myWaitlistPosition ?? '?'}', colors.tertiary),
       Event(isFull: true) => ('Full', colors.outline),
       _ => null,
@@ -40,6 +41,7 @@ class EventTile extends StatelessWidget {
         [
           DateFormat('HH:mm').format(e.localStart),
           if (e.distanceKm != null) formatDistance(e.distanceKm!),
+          if (e.price != null) '${e.price}',
           if (where.isNotEmpty) where,
           if (showCommunity) e.communityName,
         ].join(' · '),

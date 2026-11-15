@@ -107,6 +107,7 @@ void main() {
       'timeZone': 'Asia/Kolkata',
       'location': {'kind': 'online', 'onlineUrl': 'https://meet.test/x'},
       'capacity': null,
+      'price': null, // free, said out loud (so making a paid event free again reaches the server)
     });
   });
 

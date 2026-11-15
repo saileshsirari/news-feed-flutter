@@ -10,6 +10,7 @@ import 'package:shared_media/shared_media.dart';
 
 import '../data/services/api_service.dart';
 import '../geo/geo_services.dart';
+import '../payments/payment_order.dart';
 import 'event.dart';
 import 'event_screen.dart';
 import 'events_api.dart';
@@ -59,6 +60,24 @@ class _EditEventScreenState extends ConsumerState<EditEventScreen> {
     _ => null,
   };
   late bool _limited = widget.event?.capacity != null;
+
+  /// Paid tickets (the server's payments must be set up).
+  late bool _paid = widget.event?.isPaid ?? false;
+  late final _price = TextEditingController(
+    text: switch (widget.event?.price) {
+      final p? => p.amountMinor % 100 == 0 ? '${p.amountMinor ~/ 100}' : (p.amountMinor / 100).toStringAsFixed(2),
+      null => '',
+    },
+  );
+
+  /// Refunds for cancelled tickets until this many hours before the start.
+  late int _refundHours = switch (widget.event) {
+    Event(:final refundableUntil?, :final startsAt) => startsAt.difference(refundableUntil).inHours,
+    _ => 24,
+  };
+
+  /// The price is fixed once anyone has RSVPed or bought a ticket.
+  bool get _priceLocked => (widget.event?.goingCount ?? 0) > 0;
   late DateTime _start = widget.event?.localStart ?? _nextHour(DateTime.now().add(const Duration(days: 1)));
   late Duration _length =
       widget.event == null ? const Duration(hours: 2) : widget.event!.endsAt.difference(widget.event!.startsAt);
@@ -88,7 +107,7 @@ class _EditEventScreenState extends ConsumerState<EditEventScreen> {
 
   @override
   void dispose() {
-    for (final c in [_title, _description, _place, _address, _url, _capacity]) {
+    for (final c in [_title, _description, _place, _address, _url, _capacity, _price]) {
       c.dispose();
     }
     super.dispose();
@@ -139,6 +158,8 @@ class _EditEventScreenState extends ConsumerState<EditEventScreen> {
       _ when _online && !_url.text.trim().startsWith('https://') => 'An online event needs an https:// link.',
       _ when !_online && _place.text.trim().length < 2 => 'Say where it is.',
       _ when _limited && (int.tryParse(_capacity.text.trim()) ?? 0) < 1 => 'Spots must be a number, at least 1.',
+      _ when _paid && !((Money.tryParse(_price.text)?.amountMinor ?? 0) >= 100 && Money.tryParse(_price.text)!.amountMinor <= 10000000) =>
+        'A ticket price must be from ₹1 to ₹1,00,000.',
       _ when _timeZone == null => 'Still finding your time zone; try again in a moment.',
       _ => null,
     };
@@ -161,6 +182,8 @@ class _EditEventScreenState extends ConsumerState<EditEventScreen> {
         point: _point,
         onlineUrl: _url.text.trim(),
         capacity: _limited ? int.parse(_capacity.text.trim()) : null,
+        price: _paid ? Money.tryParse(_price.text) : null,
+        refundHoursBefore: _refundHours,
         coverMediaId: await _coverUpload,
       );
       final api = ref.read(eventsApiProvider);
@@ -357,6 +380,43 @@ class _EditEventScreenState extends ConsumerState<EditEventScreen> {
               keyboardType: TextInputType.number,
               decoration: const InputDecoration(labelText: 'Spots', border: OutlineInputBorder()),
             ),
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            title: const Text('Paid tickets'),
+            subtitle: Text(_priceLocked
+                ? 'The price can\'t change once people are going.'
+                : 'People pay to get a spot (card, UPI). No waitlist: it sells out.'),
+            value: _paid,
+            onChanged: _priceLocked ? null : (v) => setState(() => _paid = v),
+          ),
+          if (_paid) ...[
+            TextField(
+              controller: _price,
+              enabled: !_priceLocked,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              decoration: const InputDecoration(labelText: 'Price', prefixText: '₹ ', border: OutlineInputBorder()),
+            ),
+            const SizedBox(height: 8),
+            DropdownButtonFormField<int>(
+              initialValue: const [0, 24, 48, 72, 168].contains(_refundHours) ? _refundHours : 24,
+              decoration: const InputDecoration(labelText: 'Refunds if someone cancels', border: OutlineInputBorder()),
+              items: const [
+                DropdownMenuItem(value: 0, child: Text('Up to the start')),
+                DropdownMenuItem(value: 24, child: Text('Until 1 day before')),
+                DropdownMenuItem(value: 48, child: Text('Until 2 days before')),
+                DropdownMenuItem(value: 72, child: Text('Until 3 days before')),
+                DropdownMenuItem(value: 168, child: Text('Until 1 week before')),
+              ],
+              onChanged: (v) => setState(() => _refundHours = v ?? 24),
+            ),
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Text(
+                'If you cancel the event, everyone is refunded in full.',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ),
+          ],
           const SizedBox(height: 12),
           TextField(
             controller: _description,

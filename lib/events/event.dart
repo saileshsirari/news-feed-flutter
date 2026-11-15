@@ -1,10 +1,12 @@
 import 'package:intl/intl.dart';
 
 import '../models/models.dart';
+import '../payments/payment_order.dart';
 
 enum EventLocationKind { inPerson, online }
 
-enum RsvpStatus { going, waitlist }
+/// held: a spot kept for you while you pay (paid events).
+enum RsvpStatus { going, waitlist, held }
 
 /// An event as the signed-in user sees it.
 class Event {
@@ -36,6 +38,8 @@ class Event {
     this.canManage = false,
     this.canRsvp = false,
     this.distanceKm,
+    this.price,
+    this.refundableUntil,
   });
 
   factory Event.fromJson(Map<String, dynamic> json) {
@@ -67,12 +71,17 @@ class Event {
       myRsvp: switch (json['myRsvp']) {
         'going' => RsvpStatus.going,
         'waitlist' => RsvpStatus.waitlist,
+        'held' => RsvpStatus.held,
         _ => null,
       },
       myWaitlistPosition: json['myWaitlistPosition'] as int?,
       canManage: json['canManage'] as bool? ?? false,
       canRsvp: json['canRsvp'] as bool? ?? false,
       distanceKm: (json['distanceKm'] as num?)?.toDouble(),
+      price: Money.fromJson(json['price']),
+      refundableUntil: json['refundableUntil'] == null
+          ? null
+          : DateTime.fromMillisecondsSinceEpoch(json['refundableUntil'] as int, isUtc: true),
     );
   }
 
@@ -116,6 +125,17 @@ class Event {
 
   /// How far from where you searched ("near me" lists only).
   final double? distanceKm;
+
+  /// A ticket's price; null: free.
+  final Money? price;
+
+  /// Paid events: cancel before this and your ticket is refunded.
+  final DateTime? refundableUntil;
+
+  bool get isPaid => price != null;
+
+  /// Cancelling now would refund the ticket.
+  bool get refundableNow => refundableUntil != null && DateTime.now().toUtc().isBefore(refundableUntil!);
 
   bool get isOnline => locationKind == EventLocationKind.online;
   bool get isFull => spotsLeft == 0;

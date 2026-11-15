@@ -2,12 +2,14 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geo_kit/geo_kit.dart';
+import 'package:intl/intl.dart';
 import 'package:shared_media/shared_media.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../communities/community_screen.dart';
 import '../data/services/api_service.dart';
 import '../geo/geo_services.dart';
+import '../payments/checkout.dart';
 import '../profile/profile_screen.dart';
 import '../profile/user_avatar.dart';
 import 'calendar/add_to_calendar.dart';
@@ -121,6 +123,66 @@ class _DetailsState extends ConsumerState<_Details> {
     }
   }
 
+  void _say(String message) {
+    if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  Future<void> _buy() async {
+    setState(() => _busy = true);
+    try {
+      final result = await ref.read(eventProvider(widget.event.id).notifier).buyTicket();
+      _say(switch (result) {
+        CheckoutPaid() => 'Paid. You\'re going!',
+        CheckoutCancelled() => 'Payment cancelled. Nothing was charged.',
+        CheckoutFailed(:final message) => message,
+      });
+    } on ApiException catch (e) {
+      _say(switch (e.statusCode) {
+        409 when e.body.contains('sold out') => 'Sold out.',
+        409 => 'You already have a ticket.',
+        403 => 'Join the community to get a ticket.',
+        503 => 'Paid tickets aren\'t available right now.',
+        _ => 'Couldn\'t start the payment. Try again.',
+      });
+    } catch (_) {
+      _say('Couldn\'t start the payment. Try again.');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  /// Cancelling a paid ticket: says first whether the money comes back.
+  Future<void> _cancelTicket() async {
+    final e = widget.event;
+    final refund = e.refundableNow;
+    final sure = await showDialog<bool>(
+      context: context,
+      builder: (dialog) => AlertDialog(
+        title: const Text('Cancel your ticket?'),
+        content: Text(refund
+            ? 'You\'ll get ${e.price} back to how you paid (usually within 5–7 days).'
+            : 'The refund deadline has passed, so you won\'t get your ${e.price} back. Your spot goes to someone else.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(dialog).pop(false), child: const Text('Keep it')),
+          FilledButton(
+            onPressed: () => Navigator.of(dialog).pop(true),
+            child: Text(refund ? 'Cancel and refund' : 'Cancel without refund'),
+          ),
+        ],
+      ),
+    );
+    if (sure != true) return;
+    setState(() => _busy = true);
+    try {
+      await ref.read(eventProvider(e.id).notifier).unrsvp();
+      _say(refund ? 'Cancelled. Your refund is on its way.' : 'Cancelled.');
+    } catch (_) {
+      _say('Couldn\'t cancel. You still have your ticket; try again.');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final e = widget.event;
@@ -131,6 +193,16 @@ class _DetailsState extends ConsumerState<_Details> {
     final Widget rsvp = switch (e) {
       Event(cancelled: true) => _Banner('This event was cancelled.', colors.errorContainer, colors.onErrorContainer),
       Event(past: true) => _Banner('This event is over.', colors.surfaceContainerHighest, colors.onSurface),
+      Event(myRsvp: RsvpStatus.going, isPaid: true) => OutlinedButton.icon(
+          onPressed: _busy ? null : _cancelTicket,
+          icon: const Icon(Icons.confirmation_number),
+          label: const Text('You have a ticket · Cancel'),
+        ),
+      Event(myRsvp: RsvpStatus.held) => FilledButton.icon(
+          onPressed: _busy ? null : _buy,
+          icon: const Icon(Icons.payment),
+          label: const Text('Finish paying'),
+        ),
       Event(myRsvp: RsvpStatus.going) => OutlinedButton.icon(
           onPressed: _busy ? null : () => _rsvp(false),
           icon: const Icon(Icons.check),
@@ -142,6 +214,12 @@ class _DetailsState extends ConsumerState<_Details> {
           label: Text('Waitlist #${myWaitlistPosition ?? '?'} · Leave waitlist'),
         ),
       Event(canRsvp: false) => Text('Join ${e.communityName} to RSVP.', style: textTheme.bodySmall),
+      Event(isPaid: true, isFull: true) => const FilledButton(onPressed: null, child: Text('Sold out')),
+      Event(isPaid: true, :final price) => FilledButton.icon(
+          onPressed: _busy ? null : _buy,
+          icon: const Icon(Icons.confirmation_number_outlined),
+          label: Text('Buy ticket · $price'),
+        ),
       Event(isFull: true) => FilledButton.tonalIcon(
           onPressed: _busy ? null : () => _rsvp(true),
           icon: const Icon(Icons.playlist_add),
@@ -191,6 +269,16 @@ class _DetailsState extends ConsumerState<_Details> {
                 if (e.latitude != null && e.longitude != null)
                   _PlacePreview(point: GeoPoint(e.latitude!, e.longitude!), label: e.placeName ?? e.title),
               ],
+              if (e.price case final price?)
+                _Row(
+                  Icons.confirmation_number_outlined,
+                  '$price a ticket',
+                  e.refundableUntil == null
+                      ? null
+                      : e.refundableNow
+                          ? 'Full refund if you cancel before ${DateFormat('EEE d MMM, HH:mm').format(e.refundableUntil!.toLocal())}'
+                          : 'No refunds now (the deadline has passed)',
+                ),
               _Row(
                 Icons.group_outlined,
                 e.capacity == null ? '${e.goingCount} going' : '${e.goingCount} of ${e.capacity} going',

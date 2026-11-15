@@ -9,6 +9,7 @@ import '../config/app_config.dart';
 import '../data/services/api_service.dart' show ApiException;
 import '../data/services/service_providers.dart';
 import '../session/current_user_provider.dart';
+import '../payments/payment_order.dart';
 import 'event.dart';
 
 /// A page of results and where the next one starts (null: no more).
@@ -30,6 +31,8 @@ class EventDraft {
     this.onlineUrl,
     this.capacity,
     this.coverMediaId,
+    this.price,
+    this.refundHoursBefore = 24,
   });
 
   final String title;
@@ -49,6 +52,12 @@ class EventDraft {
   final int? capacity;
   final int? coverMediaId;
 
+  /// Null: free.
+  final Money? price;
+
+  /// A ticket cancelled up to this many hours before the start is refunded.
+  final int refundHoursBefore;
+
   Map<String, Object?> toJson() => {
         'title': title,
         'description': description,
@@ -66,6 +75,8 @@ class EventDraft {
               },
         'capacity': capacity,
         'coverMediaId': ?coverMediaId,
+        'price': price == null ? null : {'amountMinor': price!.amountMinor, 'currency': price!.currency},
+        if (price != null) 'refundHoursBefore': refundHoursBefore,
       };
 }
 
@@ -114,6 +125,16 @@ class EventsApi {
   Future<Event> update(int id, EventDraft draft) async => _event(await _send('PATCH', _uri('/events/$id'), draft.toJson()));
 
   Future<Event> cancel(int id) async => _event(await _send('POST', _uri('/events/$id/cancel')));
+
+  /// Paid events: holds a spot for you (10 minutes) and makes an order to
+  /// pay; open [PaymentOrder.checkoutOptions] in the payment sheet.
+  Future<({Event event, PaymentOrder order})> buyTicket(int id) async {
+    final json = (await _send('POST', _uri('/events/$id/ticket')))! as Map<String, dynamic>;
+    return (
+      event: Event.fromJson(json['event'] as Map<String, dynamic>),
+      order: PaymentOrder.fromJson(json['order'] as Map<String, dynamic>),
+    );
+  }
 
   /// Going, or the waitlist when it's full.
   Future<Event> rsvp(int id) async => _event(await _send('PUT', _uri('/events/$id/rsvp')));

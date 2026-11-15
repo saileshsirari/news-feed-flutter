@@ -14,6 +14,7 @@ import '../events/event.dart';
 import '../events/event_tile.dart';
 import '../events/events_providers.dart';
 import '../geo/nearby_screen.dart';
+import '../payments/my_tickets_screen.dart';
 
 /// The Communities tab: yours first, then the biggest ones to discover, or
 /// search results while you type.
@@ -64,6 +65,11 @@ class _CommunitiesScreenState extends ConsumerState<CommunitiesScreen> {
       appBar: AppBar(
         title: const Text('Communities'),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.confirmation_number_outlined),
+            tooltip: 'Your tickets',
+            onPressed: () => MyTicketsScreen.open(context),
+          ),
           IconButton(
             icon: const Icon(Icons.near_me_outlined),
             tooltip: 'Near me',

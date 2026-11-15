@@ -1,6 +1,8 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../data/paged_list.dart';
+import '../payments/checkout.dart';
+import '../payments/payments_api.dart';
 import 'event.dart';
 import 'events_api.dart';
 
@@ -49,7 +51,46 @@ class EventNotifier extends AsyncNotifier<Event> {
   Future<Event> build() => ref.watch(eventsApiProvider).get(id);
 
   Future<void> rsvp() => _apply(() => _api.rsvp(id));
-  Future<void> unrsvp() => _apply(() => _api.unrsvp(id));
+
+  /// Buys a ticket: a spot held and an order made (server), the payment
+  /// sheet (Razorpay), then the sheet's answer passed to the server to check.
+  /// Closing the sheet lets the held spot go at once, for someone else.
+  /// Returns what the sheet answered.
+  Future<CheckoutResult> buyTicket() async {
+    final api = _api;
+    final payments = ref.read(paymentsApiProvider);
+    final checkout = ref.read(checkoutProvider);
+
+    final (:event, :order) = await api.buyTicket(id);
+    if (ref.mounted) state = AsyncData(event);
+    final options = order.checkoutOptions;
+    if (options == null) return const CheckoutFailed('This order can\'t be paid any more. Try again.');
+
+    final result = await checkout.open(options);
+    switch (result) {
+      case CheckoutPaid():
+        try {
+          await payments.confirm(order.id, result);
+        } on Object {
+          // The money went through; Razorpay tells the server directly too
+          // (its webhook), so the ticket arrives either way. Refresh below.
+        }
+      case CheckoutCancelled() || CheckoutFailed():
+        await api.unrsvp(id); // let the held spot go
+    }
+    final now = await api.get(id);
+    if (ref.mounted) {
+      state = AsyncData(now);
+      _refreshLists(now.communityId);
+      ref.invalidate(myOrdersProvider);
+    }
+    return result;
+  }
+  /// Not going. A paid ticket is refunded if it's before the refund deadline.
+  Future<void> unrsvp() async {
+    await _apply(() => _api.unrsvp(id));
+    if (ref.mounted) ref.invalidate(myOrdersProvider);
+  }
   Future<void> cancel() => _apply(() => _api.cancel(id));
 
   /// After an edit made on the edit screen.
