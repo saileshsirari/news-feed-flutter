@@ -1,0 +1,25 @@
+name: feature_feed
+description: "The news feed mini-app: posts, comments, likes and profiles."
+publish_to: 'none'
+version: 0.1.0
+
+environment:
+  sdk: ^3.13.4
+
+# Only app_core: other mini-apps' screens are opened by link (AppLinks).
+dependencies:
+  flutter:
+    sdk: flutter
+  app_core:
+    path: ../app_core
+  flutter_riverpod: ^3.4.3
+  shared_media:
+    path: ../shared_media
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+  flutter_secure_storage: ^11.2.0
+  http: ^1.2.2
+  shared_preferences: ^2.3.3

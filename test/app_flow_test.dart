@@ -5,17 +5,18 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
-import 'package:news_feed_flutter/config/app_config.dart';
-import 'package:news_feed_flutter/data/services/api_service.dart';
-import 'package:news_feed_flutter/data/services/service_providers.dart';
-import 'package:news_feed_flutter/data/services/socket_provider.dart';
-import 'package:news_feed_flutter/main.dart';
-import 'package:news_feed_flutter/session/device_registration.dart';
+import 'package:app_core/config/app_config.dart';
+import 'package:app_core/data/services/api_service.dart';
+import 'package:app_core/data/services/service_providers.dart';
+import 'package:app_core/data/services/socket_provider.dart';
+import 'package:app_core/app_core.dart';
+import 'package:news_feed_flutter/mini_apps.dart';
+import 'package:app_core/session/device_registration.dart';
 import 'package:oidc_auth/oidc_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'helpers/fake_chat_server.dart';
-import 'helpers/fake_socket.dart';
+import 'package:feature_chat/testing/fake_chat_server.dart';
+import 'package:app_core/testing/fake_socket.dart';
 
 /// The whole app against a fake server: every screen and notifier builds
 /// for real, so a mistake that only shows up when widgets mount (not in a
@@ -72,8 +73,9 @@ void main() {
           apiServiceProvider.overrideWithValue(api),
           socketProvider.overrideWith((ref, userId) => socket),
           ...localChatOverrides(),
+          ...superAppOverrides(allMiniApps()),
         ],
-        child: const NewsFeedApp(),
+        child: const SuperApp(title: 'News Feed'),
       ),
     );
     await tester.pumpAndSettle();
@@ -83,20 +85,28 @@ void main() {
     await tester.tap(find.text('Log in as test account'));
     await tester.pumpAndSettle();
 
-    // Feed for user_0.
-    expect(find.text('@user_0 · 12 followers'), findsOneWidget);
-    expect(find.text('hello from user_1'), findsOneWidget);
+    // Home: a tile per mini-app (the fake server has no /config/apps, so
+    // all of them), and chat already listening for messages and calls.
+    expect(find.byType(MiniAppTile), findsNWidgets(3));
     expect(socket.controller.hasListener, isTrue);
 
-    // Chat tab.
-    await tester.tap(find.text('Chat'));
-    await tester.pumpAndSettle();
-    expect(find.text('see you'), findsOneWidget);
-
-    // Back to the feed and log out: login screen again, socket released.
+    // The feed, for user_0, full screen; back is Home.
     await tester.tap(find.text('Feed'));
     await tester.pumpAndSettle();
-    await tester.tap(find.byIcon(Icons.more_vert));
+    expect(find.text('@user_0 · 12 followers'), findsOneWidget);
+    expect(find.text('hello from user_1'), findsOneWidget);
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+
+    // Chat.
+    await tester.tap(find.byKey(const ValueKey('tile-chat')));
+    await tester.pumpAndSettle();
+    expect(find.text('see you'), findsOneWidget);
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+
+    // Log out from the account menu: login screen again, socket released.
+    await tester.tap(find.byTooltip('Account'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Log out'));
     await tester.pumpAndSettle();
@@ -165,8 +175,9 @@ void main() {
           socketProvider.overrideWith((ref, userId) => socket),
           deviceDescriptionProvider.overrideWithValue(() async => (name: 'Test phone', platform: 'android')),
           ...localChatOverrides(),
+          ...superAppOverrides(allMiniApps()),
         ],
-        child: const NewsFeedApp(),
+        child: const SuperApp(title: 'News Feed'),
       ),
     );
     await tester.pumpAndSettle();
@@ -175,6 +186,8 @@ void main() {
     await tester.pumpAndSettle();
 
     // The server said who we are (GET /me), and every request carried the token.
+    await tester.tap(find.text('Feed'));
+    await tester.pumpAndSettle();
     expect(find.text('@user_0 · 12 followers'), findsOneWidget);
     expect(apiAuthorization, isNotEmpty);
     expect(apiAuthorization.toSet(), {'Bearer token-1'});
@@ -184,6 +197,7 @@ void main() {
     expect(deviceRegistrations, hasLength(1));
     expect(deviceRegistrations.single, matches(RegExp(r'^[a-z0-9]{32} \{"name":"Test phone","platform":"android"\}$')));
 
+    // The feed's own menu still logs out, as before.
     await tester.tap(find.byIcon(Icons.more_vert));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Log out'));

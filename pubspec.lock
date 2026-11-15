@@ -9,6 +9,13 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.3.79"
+  app_core:
+    dependency: "direct main"
+    description:
+      path: "packages/app_core"
+      relative: true
+    source: path
+    version: "0.1.0"
   archive:
     dependency: transitive
     description:
@@ -90,7 +97,7 @@ packages:
     source: hosted
     version: "1.4.1"
   chat_store:
-    dependency: "direct main"
+    dependency: transitive
     description:
       path: "packages/chat_store"
       relative: true
@@ -233,7 +240,7 @@ packages:
     source: hosted
     version: "0.3.2"
   device_info_plus:
-    dependency: "direct main"
+    dependency: transitive
     description:
       name: device_info_plus
       sha256: "0891702f96b2e465fe567b7ec448380e6b1c14f60af552a8536d9f583b6b8442"
@@ -265,7 +272,7 @@ packages:
     source: hosted
     version: "0.3.1"
   emoji_picker_flutter:
-    dependency: "direct main"
+    dependency: transitive
     description:
       name: emoji_picker_flutter
       sha256: "50f4da413a3dc5d2f59f2b0835ab3b3cce76c0779eb275058213506e6709503b"
@@ -304,6 +311,27 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "4.0.0"
+  feature_chat:
+    dependency: "direct main"
+    description:
+      path: "packages/feature_chat"
+      relative: true
+    source: path
+    version: "0.1.0"
+  feature_communities:
+    dependency: "direct main"
+    description:
+      path: "packages/feature_communities"
+      relative: true
+    source: path
+    version: "0.1.0"
+  feature_feed:
+    dependency: "direct main"
+    description:
+      path: "packages/feature_feed"
+      relative: true
+    source: path
+    version: "0.1.0"
   ffi:
     dependency: transitive
     description:
@@ -361,7 +389,7 @@ packages:
     source: hosted
     version: "0.9.3+6"
   firebase_core:
-    dependency: "direct main"
+    dependency: transitive
     description:
       name: firebase_core
       sha256: "21551c1205441d9d155660ea0a409530b65a8d66ce88002bab3f38d94a8638fc"
@@ -438,7 +466,7 @@ packages:
     source: hosted
     version: "6.0.0"
   flutter_local_notifications:
-    dependency: "direct main"
+    dependency: transitive
     description:
       name: flutter_local_notifications
       sha256: e99e9c6078d1359ba131b2c1eb8d68837170836a01bf2cea3cf2fa13e62ac2ac
@@ -499,7 +527,7 @@ packages:
     source: hosted
     version: "2.0.35"
   flutter_riverpod:
-    dependency: "direct main"
+    dependency: "direct dev"
     description:
       name: flutter_riverpod
       sha256: "2b7f9d2a3c730ac1a98221b420cef966b990fca7ab546ede324642ca57a533e3"
@@ -523,7 +551,7 @@ packages:
     source: hosted
     version: "2.13.0"
   flutter_secure_storage:
-    dependency: "direct main"
+    dependency: "direct dev"
     description:
       name: flutter_secure_storage
       sha256: d4e1fb6b2cb524868929e78dc0282fa000554b22060fb53789dc481c9fc95bb8
@@ -576,7 +604,7 @@ packages:
     source: sdk
     version: "0.0.0"
   flutter_timezone:
-    dependency: "direct main"
+    dependency: transitive
     description:
       name: flutter_timezone
       sha256: "7830bc64bef0b003468fc1f58fc3f3faf54817f8cd6e68fa818b306560410d68"
@@ -613,7 +641,7 @@ packages:
     source: hosted
     version: "1.6.2+hotfix.3"
   geo_kit:
-    dependency: "direct main"
+    dependency: transitive
     description:
       path: "packages/geo_kit"
       relative: true
@@ -716,7 +744,7 @@ packages:
     source: hosted
     version: "0.15.7"
   http:
-    dependency: "direct main"
+    dependency: "direct dev"
     description:
       name: http
       sha256: "87721a4a50b19c7f1d49001e51409bddc46303966ce89a65af4f4e6004896412"
@@ -804,7 +832,7 @@ packages:
     source: hosted
     version: "0.2.2"
   intl:
-    dependency: "direct main"
+    dependency: transitive
     description:
       name: intl
       sha256: "1ca20c894b1717686a2319b8548763d812bc0aabdac580420a44c5178c57a867"
@@ -892,7 +920,7 @@ packages:
     source: hosted
     version: "1.0.1"
   livekit_client:
-    dependency: "direct main"
+    dependency: transitive
     description:
       name: livekit_client
       sha256: a410348effd06f4220c2d6ed9ad3935406e81fffbd1c366eba1c39fe0558f449
@@ -972,7 +1000,7 @@ packages:
     source: hosted
     version: "1.0.1"
   mls_crypto:
-    dependency: "direct main"
+    dependency: transitive
     description:
       path: "packages/mls_crypto"
       relative: true
@@ -1019,7 +1047,7 @@ packages:
     source: hosted
     version: "2.1.3"
   oidc_auth:
-    dependency: "direct main"
+    dependency: "direct dev"
     description:
       path: "packages/oidc_auth"
       relative: true
@@ -1106,7 +1134,7 @@ packages:
     source: hosted
     version: "2.3.0"
   permission_handler:
-    dependency: "direct main"
+    dependency: transitive
     description:
       name: permission_handler
       sha256: e6bcecadfe40df6b888141f23cbaf6ba6c3da49fb33f6ff887d060dd48544fbd
@@ -1218,7 +1246,7 @@ packages:
     source: hosted
     version: "2.2.1"
   razorpay_flutter:
-    dependency: "direct main"
+    dependency: transitive
     description:
       name: razorpay_flutter
       sha256: f0ffd4e162f0c4c8d72e512deaece22d2179e653e470fd794865283c28ff9079
@@ -1258,14 +1286,14 @@ packages:
     source: hosted
     version: "0.3.2"
   shared_media:
-    dependency: "direct main"
+    dependency: transitive
     description:
       path: "packages/shared_media"
       relative: true
     source: path
     version: "0.1.0"
   shared_preferences:
-    dependency: "direct main"
+    dependency: "direct dev"
     description:
       name: shared_preferences
       sha256: c3025c5534b01739267eb7d76959bbc25a6d10f6988e1c2a3036940133dd10bf
@@ -1494,7 +1522,7 @@ packages:
     source: hosted
     version: "1.1.9"
   url_launcher:
-    dependency: "direct main"
+    dependency: transitive
     description:
       name: url_launcher
       sha256: e8cc955c97e06df9879140a1fe301f3d493f01b7c62dec7f46834be31d7e9fda
@@ -1630,7 +1658,7 @@ packages:
     source: hosted
     version: "15.3.0"
   web:
-    dependency: "direct main"
+    dependency: transitive
     description:
       name: web
       sha256: "868d88a33d8a87b18ffc05f9f030ba328ffefba92d6c127917a2ba740f9cfe4a"
@@ -1646,7 +1674,7 @@ packages:
     source: hosted
     version: "1.0.1"
   web_socket_channel:
-    dependency: "direct main"
+    dependency: transitive
     description:
       name: web_socket_channel
       sha256: d645757fb0f4773d602444000a8131ff5d48c9e47adfe9772652dd1a4f2d45c8

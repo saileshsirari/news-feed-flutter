@@ -1,0 +1,33 @@
+name: feature_chat
+description: "The chat mini-app: conversations, end-to-end encryption (MLS), calls and presence."
+publish_to: 'none'
+version: 0.1.0
+
+environment:
+  sdk: ^3.13.4
+
+# Only app_core: other mini-apps' screens are opened by link (AppLinks).
+dependencies:
+  flutter:
+    sdk: flutter
+  app_core:
+    path: ../app_core
+  chat_store:
+    path: ../chat_store
+  emoji_picker_flutter: ^4.5.4
+  flutter_riverpod: ^3.4.3
+  flutter_secure_storage: ^11.2.0
+  http: ^1.2.2
+  livekit_client: ^2.13.0
+  mls_crypto:
+    path: ../mls_crypto
+  permission_handler: ^13.0.2
+  shared_media:
+    path: ../shared_media
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+  fake_async: ^1.3.3
+  shared_preferences: ^2.3.3

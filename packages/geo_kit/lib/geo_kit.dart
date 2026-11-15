@@ -5,6 +5,7 @@
 library;
 
 export 'src/geo_point.dart';
+export 'src/locale_defaults.dart';
 export 'src/my_location.dart';
 export 'src/place.dart';
 export 'src/place_map.dart';

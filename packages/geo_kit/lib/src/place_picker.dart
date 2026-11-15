@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 
 import 'geo_point.dart';
+import 'locale_defaults.dart';
 import 'my_location.dart';
 import 'place.dart';
 import 'place_map.dart';
@@ -56,8 +57,10 @@ class PlacePickerScreen extends StatefulWidget {
   final bool areaOnly;
   final String title;
 
-  /// Where the map opens with nothing else to go on: Bengaluru.
-  static const fallbackCenter = GeoPoint(12.9716, 77.5946);
+  /// Where the map opens with nothing else to go on ([initial], then
+  /// [near], the app's rough idea of where you are): the middle of the
+  /// device's country (see [defaultMapView]). The picker never asks for
+  /// the location by itself; "My location" does, when tapped.
 
   @override
   State<PlacePickerScreen> createState() => _PlacePickerScreenState();
@@ -67,7 +70,11 @@ class _PlacePickerScreenState extends State<PlacePickerScreen> {
   final _map = MapController();
   final _query = TextEditingController();
 
-  late GeoPoint _center = widget.initial?.point ?? widget.near ?? PlacePickerScreen.fallbackCenter;
+  late final _fallback = defaultMapView();
+  late GeoPoint _center = widget.initial?.point ?? widget.near ?? _fallback.center;
+
+  /// Zoomed out to the whole country when opening on the fallback.
+  bool get _onFallback => widget.initial == null && widget.near == null;
 
   /// The place under the pin when it came from a search (so its name is
   /// known); null once the map is moved by hand.
@@ -198,7 +205,7 @@ class _PlacePickerScreenState extends State<PlacePickerScreen> {
                   tiles: widget.tiles,
                   controller: _map,
                   center: _center,
-                  zoom: widget.areaOnly ? 12 : 15,
+                  zoom: _onFallback ? _fallback.zoom : (widget.areaOnly ? 12 : 15),
                   onMoved: (p) => setState(() {
                     _center = p;
                     _named = null;

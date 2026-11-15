@@ -1,0 +1,35 @@
+name: app_core
+description: "The super app's shared core: sign-in, API client and models, push, theme, Home shell, and the MiniApp interface mini-apps plug into."
+publish_to: 'none'
+version: 0.1.0
+
+environment:
+  sdk: ^3.13.4
+
+# Deliberately no dependency on any feature_* package: mini-apps plug in
+# through MiniApp (lib/mini_app/mini_app.dart), never the other way round.
+dependencies:
+  flutter:
+    sdk: flutter
+  device_info_plus: ^13.2.0
+  firebase_core: ^5.1.0
+  firebase_messaging: ^17.0.1
+  flutter_local_notifications: ^23.0.0
+  flutter_riverpod: ^3.4.3
+  geo_kit:
+    path: ../geo_kit
+  http: ^1.2.2
+  intl: ^0.20.3
+  oidc_auth:
+    path: ../oidc_auth
+  shared_media:
+    path: ../shared_media
+  shared_preferences: ^2.3.3
+  web: ^1.1.1
+  web_socket_channel: ^3.0.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+  flutter_secure_storage: ^11.2.0

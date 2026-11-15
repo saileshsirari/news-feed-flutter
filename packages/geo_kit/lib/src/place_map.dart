@@ -9,16 +9,35 @@ import 'geo_point.dart';
 /// (userAgentPackageName); a busy app would move to a paid tile host or
 /// its own, by changing only this.
 class MapTiles {
-  const MapTiles._(this.urlTemplate, this.userAgentPackageName);
+  const MapTiles._(this.urlTemplate, this.userAgentPackageName, this.attribution, this.attributionUrl);
 
+  /// OpenStreetMap's own free tile servers: fine while developing, but their
+  /// policy forbids heavy use, so production switches with [MapTiles.custom].
   const MapTiles.openStreetMap({required String userAgentPackageName})
-      : this._('https://tile.openstreetmap.org/{z}/{x}/{y}.png', userAgentPackageName);
+      : this._('https://tile.openstreetmap.org/{z}/{x}/{y}.png', userAgentPackageName, _osmCredit, _osmCopyright);
+
+  /// Any provider's tiles: Protomaps, MapTiler, Stadia, your own server.
+  /// [urlTemplate] has `{z}/{x}/{y}` placeholders; [attribution] is the credit
+  /// line the provider requires ("© MapTiler © OpenStreetMap contributors").
+  const MapTiles.custom({
+    required String this.urlTemplate,
+    required this.userAgentPackageName,
+    this.attribution = _osmCredit,
+    this.attributionUrl = _osmCopyright,
+  });
 
   /// No pictures, just pins on a blank map (widget tests: no network).
-  static const none = MapTiles._(null, '');
+  static const none = MapTiles._(null, '', '', '');
+
+  static const _osmCredit = '© OpenStreetMap contributors';
+  static const _osmCopyright = 'https://www.openstreetmap.org/copyright';
 
   final String? urlTemplate;
   final String userAgentPackageName;
+
+  /// The credit shown on the map, and where tapping it goes.
+  final String attribution;
+  final String attributionUrl;
 }
 
 /// A pin on a [PlaceMap].
@@ -115,8 +134,9 @@ class PlaceMap extends StatelessWidget {
           RichAttributionWidget(
             attributions: [
               TextSourceAttribution(
-                'OpenStreetMap contributors',
-                onTap: () => launchUrl(Uri.parse('https://www.openstreetmap.org/copyright')),
+                // flutter_map adds the © itself.
+                tiles.attribution.replaceFirst(RegExp(r'^©\s*'), ''),
+                onTap: () => launchUrl(Uri.parse(tiles.attributionUrl)),
               ),
             ],
           ),

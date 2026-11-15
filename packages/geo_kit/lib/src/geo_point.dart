@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:latlong2/latlong.dart';
+import 'locale_defaults.dart';
 
 /// A spot on the earth: latitude (north-south, -90..90) and longitude
 /// (east-west, -180..180), in degrees. The same as the server's src/geo.
@@ -51,9 +52,21 @@ class GeoPoint {
   String toString() => 'GeoPoint(${lat.toStringAsFixed(5)}, ${lng.toStringAsFixed(5)})';
 }
 
-/// "350 m", "1.5 km", "17 km": precise when close, rounder when far.
-String formatDistance(double km) {
+/// "350 m", "1.5 km", "17 km" (or "500 ft", "1.2 mi", "11 mi"): precise
+/// when close, rounder when far. [unit] defaults to the device's region
+/// (miles in the USA and the UK, km elsewhere); distances arrive in km
+/// from the server either way.
+String formatDistance(double km, {DistanceUnit? unit}) {
+  if ((unit ?? DistanceUnit.device) == DistanceUnit.miles) {
+    final miles = km / _kmPerMile;
+    if (miles < 0.1) return '${(miles * _feetPerMile / 50).round() * 50} ft';
+    if (miles < 10) return '${miles.toStringAsFixed(1)} mi';
+    return '${miles.round()} mi';
+  }
   if (km < 1) return '${(km * 1000 / 50).round() * 50} m';
   if (km < 10) return '${km.toStringAsFixed(1)} km';
   return '${km.round()} km';
 }
+
+const _kmPerMile = 1.609344;
+const _feetPerMile = 5280;
