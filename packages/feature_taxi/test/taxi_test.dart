@@ -7,6 +7,7 @@ import 'package:app_core/geo/geo_services.dart';
 import 'package:app_core/session/current_user_provider.dart';
 import 'package:app_core/testing/fake_socket.dart';
 import 'package:feature_taxi/feature_taxi.dart';
+import 'package:feature_taxi/src/car_marker.dart';
 import 'package:feature_taxi/src/models.dart';
 import 'package:feature_taxi/src/taxi_api.dart';
 import 'package:feature_taxi/src/taxi_controllers.dart';
@@ -202,6 +203,14 @@ void main() {
       expect(const Fare(1925, 'USD').format(locale: 'en_US'), '\$19.25');
     });
 
+    test('compass bearings', () {
+      const cp = GeoPoint(28.6315, 77.2167);
+      expect(bearing(cp, const GeoPoint(28.7, 77.2167)), closeTo(0, 0.01)); // north
+      expect(bearing(cp, const GeoPoint(28.6315, 77.3)), closeTo(90, 0.1)); // east
+      expect(bearing(cp, const GeoPoint(28.5, 77.2167)), closeTo(180, 0.01)); // south
+      expect(bearing(cp, const GeoPoint(28.6315, 77.1)), closeTo(270, 0.1)); // west
+    });
+
     test('statuses, including in_progress', () {
       expect(TripStatus.parse('in_progress'), TripStatus.inProgress);
       expect(TripStatus.parse('offered').isMatching, isTrue);
@@ -273,7 +282,10 @@ void main() {
       expect(find.text('Ravi is on the way'), findsOneWidget);
       expect(find.text('White Swift Dzire · DL 1C AB 1234'), findsOneWidget);
       expect(find.text('About 2 min away.'), findsOneWidget);
-      expect(find.byTooltip('Your driver'), findsOneWidget);
+      // The car on the map, named after its driver, facing the pickup (due west of it).
+      expect(find.byTooltip('Ravi'), findsOneWidget);
+      double heading() => tester.widget<CarMarker>(find.byType(CarMarker)).headingDegrees;
+      expect(heading(), closeTo(270, 1));
 
       // The car moves closer: no fetch, just the new position (and a new ETA).
       final fetches = server.asked.length;
@@ -281,6 +293,8 @@ void main() {
       await settle(tester);
       expect(server.asked.length, fetches);
       expect(find.text('About 1 min away.'), findsOneWidget);
+      // It drove west, a touch north: it faces that way.
+      expect(heading(), closeTo(271.6, 0.5));
 
       // Someone else's trip: ignored.
       socket.controller.add({'type': 'taxi_trip', 'tripId': 8, 'status': 'completed'});
@@ -299,7 +313,7 @@ void main() {
       await settle(tester);
       expect(find.text('You\'ve arrived'), findsOneWidget);
       expect(find.text('Please pay ₹396 in cash.'), findsOneWidget);
-      expect(find.byTooltip('Your driver'), findsNothing);
+      expect(find.byType(CarMarker), findsNothing);
     });
 
     taxiTest('full map: the details slide down to a peek, and come back', (tester) async {

@@ -42,12 +42,24 @@ class MapTiles {
 
 /// A pin on a [PlaceMap].
 class MapPin {
-  const MapPin({required this.point, required this.label, this.onTap, this.highlighted = false});
+  const MapPin({
+    required this.point,
+    required this.label,
+    this.onTap,
+    this.highlighted = false,
+    this.marker,
+    this.markerSize = 40,
+  });
 
   final GeoPoint point;
   final String label;
   final VoidCallback? onTap;
   final bool highlighted;
+
+  /// Drawn instead of the usual pin, centred on [point]: a car seen from
+  /// above for a ride, say. [markerSize] is its width and height.
+  final Widget? marker;
+  final double markerSize;
 }
 
 /// A map with pins, and optionally a circle (how far "near me" looks).
@@ -113,9 +125,10 @@ class PlaceMap extends StatelessWidget {
             for (final pin in pins)
               Marker(
                 point: pin.point.latLng,
-                width: 40,
-                height: 40,
-                alignment: Alignment.topCenter, // the pin's tip on the spot
+                width: pin.marker == null ? 40 : pin.markerSize,
+                height: pin.marker == null ? 40 : pin.markerSize,
+                // A pin's tip on the spot; a custom marker's middle.
+                alignment: pin.marker == null ? Alignment.topCenter : Alignment.center,
                 child: Semantics(
                   label: pin.label,
                   button: pin.onTap != null,
@@ -123,7 +136,8 @@ class PlaceMap extends StatelessWidget {
                     onTap: pin.onTap,
                     child: Tooltip(
                       message: pin.label,
-                      child: Icon(Icons.location_on, size: 40, color: pin.highlighted ? colors.tertiary : colors.primary),
+                      child: pin.marker ??
+                          Icon(Icons.location_on, size: 40, color: pin.highlighted ? colors.tertiary : colors.primary),
                     ),
                   ),
                 ),

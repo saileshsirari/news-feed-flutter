@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geo_kit/geo_kit.dart';
 
+import 'car_marker.dart';
 import 'models.dart';
 import 'taxi_api.dart';
 import 'taxi_controllers.dart';
@@ -106,7 +107,14 @@ class _TripBodyState extends ConsumerState<_TripBody> {
                 pins: [
                   MapPin(point: trip.pickup, label: 'Pickup: ${trip.pickupLabel}'),
                   MapPin(point: trip.drop, label: 'Drop-off: ${trip.dropLabel}'),
-                  if (car != null) MapPin(point: car, label: trip.isDriver ? 'You' : 'Your driver', highlighted: true),
+                  if (car != null)
+                    MapPin(
+                      point: car,
+                      // The driver's name, as on the sheet ("Ravi Kumar").
+                      label: trip.isDriver ? 'You' : (trip.driver?.name ?? 'Your driver'),
+                      marker: CarMarker(headingDegrees: trip.carHeading),
+                      markerSize: 44,
+                    ),
                 ],
               ),
             ),

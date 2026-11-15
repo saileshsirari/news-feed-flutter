@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/foundation.dart';
 import 'package:geo_kit/geo_kit.dart';
 import 'package:intl/intl.dart';
@@ -151,6 +153,7 @@ class Trip {
     this.driverLocation,
     this.pickupEtaS,
     this.riderName,
+    this.driverHeading,
   });
 
   final int id;
@@ -178,6 +181,18 @@ class Trip {
   /// Rough seconds until the car reaches the pickup.
   final int? pickupEtaS;
   final String? riderName;
+
+  /// Which way the car last moved (compass degrees, 0 = north), worked out
+  /// on the phone from its last two positions; null before it has moved.
+  final double? driverHeading;
+
+  /// Which way to draw the car: the way it last moved, or else towards
+  /// where it's going next (the pickup, then the drop-off).
+  double get carHeading {
+    final car = driverLocation;
+    if (driverHeading != null || car == null) return driverHeading ?? 0;
+    return bearing(car, status == TripStatus.inProgress ? drop : pickup);
+  }
 
   factory Trip.fromJson(Map<String, dynamic> json) {
     GeoPoint point(Object? p) {
@@ -232,6 +247,10 @@ class Trip {
     // The car moved: work the ETA out again, roughly (22 km/h, roads 1.35x the crow's path).
     pickupEtaS: status == TripStatus.accepted ? (p.distanceKm(pickup) * 1.35 / 22 * 3600).round() : pickupEtaS,
     riderName: riderName,
+    // Only a real move (more than ~5 m) turns the car: GPS wobbles when parked.
+    driverHeading: driverLocation != null && driverLocation!.distanceKm(p) > 0.005
+        ? bearing(driverLocation!, p)
+        : driverHeading,
   );
 
   /// "Connaught Place", or the spot's coordinates when it had no name.
@@ -296,6 +315,17 @@ class Vehicle {
 
   factory Vehicle.fromJson(Map<String, dynamic> json) =>
       Vehicle(vehicle: json['vehicle'] as String, plate: json['plate'] as String);
+}
+
+/// The compass direction from [from] to [to], in degrees (0 = north, 90 = east).
+double bearing(GeoPoint from, GeoPoint to) {
+  double rad(double d) => d * math.pi / 180;
+  final dLng = rad(to.lng - from.lng);
+  final y = math.sin(dLng) * math.cos(rad(to.lat));
+  final x =
+      math.cos(rad(from.lat)) * math.sin(rad(to.lat)) -
+      math.sin(rad(from.lat)) * math.cos(rad(to.lat)) * math.cos(dLng);
+  return (math.atan2(y, x) * 180 / math.pi + 360) % 360;
 }
 
 /// "17 min", "1 h 5 min".
