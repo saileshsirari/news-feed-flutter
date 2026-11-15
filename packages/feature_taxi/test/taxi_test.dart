@@ -302,6 +302,32 @@ void main() {
       expect(find.byTooltip('Your driver'), findsNothing);
     });
 
+    taxiTest('full map: the details slide down to a peek, and come back', (tester) async {
+      server.newTrip(status: 'offered');
+      server.accepted();
+      await show(tester, const TripScreen(tripId: 7));
+      final screenHeight = tester.view.physicalSize.height / tester.view.devicePixelRatio;
+      bool onScreen(Finder f) => tester.getTopLeft(f).dy < screenHeight;
+      const car = 'White Swift Dzire · DL 1C AB 1234';
+
+      expect(onScreen(find.text(car)), isTrue);
+      await tester.tap(find.byTooltip('Full map'));
+      await tester.pumpAndSettle();
+      // The headline still peeks out at the bottom; the details are below the screen.
+      expect(
+        tester.getTopLeft(find.text('Ravi is on the way')).dy,
+        inInclusiveRange(screenHeight * 0.85, screenHeight),
+      );
+      expect(onScreen(find.text(car)), isFalse);
+      expect(find.byTooltip('Show details'), findsOneWidget);
+
+      // Tapping the handle (or the button) brings them back.
+      await tester.tap(find.bySemanticsLabel('Show or hide ride details'));
+      await tester.pumpAndSettle();
+      expect(onScreen(find.text(car)), isTrue);
+      expect(find.byTooltip('Full map'), findsOneWidget);
+    });
+
     taxiTest('no drivers nearby', (tester) async {
       server.newTrip(status: 'cancelled')
         ..['cancelledBy'] = 'system'

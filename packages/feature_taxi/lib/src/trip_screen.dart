@@ -35,41 +35,147 @@ class TripScreen extends ConsumerWidget {
   }
 }
 
-class _TripBody extends ConsumerWidget {
+/// The map fills the screen; the ride's details sit on a sheet over it,
+/// like Ola's and Uber's: drag the sheet down (or tap "Full map") to see
+/// more map, and its handle and headline stay showing at the bottom, so
+/// one tap or drag brings the details back.
+///
+///    ┌──────────────┐          ┌──────────────┐
+///    │     map      │  drag ↓  │              │
+///    │              │  ─────▶  │     map      │
+///    ├──── ═══ ─────┤          │              │
+///    │ Ravi is on…  │          ├──── ═══ ─────┤
+///    │ details      │  ◀─────  │ Ravi is on…  │  (the peek)
+///    └──────────────┘  tap/↑   └──────────────┘
+///
+/// Compose comparison: a BottomSheetScaffold with a peek height.
+class _TripBody extends ConsumerStatefulWidget {
   const _TripBody({required this.trip});
 
   final Trip trip;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_TripBody> createState() => _TripBodyState();
+}
+
+class _TripBodyState extends ConsumerState<_TripBody> {
+  final _sheet = DraggableScrollableController();
+
+  /// The sheet's height pulled down: the handle and the headline.
+  static const _peekPx = 88.0;
+
+  /// Its usual height, as a share of the space under the app bar.
+  static const _open = 0.5;
+
+  @override
+  void dispose() {
+    _sheet.dispose();
+    super.dispose();
+  }
+
+  bool get _isPeeking => _sheet.isAttached && _sheet.size <= _peekFraction + 0.01;
+  double _peekFraction = 0.12;
+
+  /// Full map (sheet down to its peek), or the details back.
+  void _toggle() {
+    if (!_sheet.isAttached) return;
+    _sheet.animateTo(
+      _isPeeking ? _open : _peekFraction,
+      duration: const Duration(milliseconds: 250),
+      curve: Curves.easeOutCubic,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final trip = widget.trip;
     final car = trip.driverLocation;
-    return Column(
-      children: [
-        Expanded(
-          child: PlaceMap(
-            // A new key when the car first appears, so the map opens on it.
-            key: ValueKey(car == null),
-            tiles: ref.watch(mapTilesProvider),
-            center: car ?? trip.pickup,
-            zoom: 14,
-            pins: [
-              MapPin(point: trip.pickup, label: 'Pickup: ${trip.pickupLabel}'),
-              MapPin(point: trip.drop, label: 'Drop-off: ${trip.dropLabel}'),
-              if (car != null) MapPin(point: car, label: trip.isDriver ? 'You' : 'Your driver', highlighted: true),
-            ],
-          ),
-        ),
-        Material(
-          elevation: 8,
-          child: SafeArea(
-            top: false,
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: _TripPanel(trip: trip),
+    final theme = Theme.of(context);
+    return LayoutBuilder(
+      builder: (context, box) {
+        _peekFraction = (_peekPx / box.maxHeight).clamp(0.05, _open - 0.05);
+        return Stack(
+          children: [
+            Positioned.fill(
+              child: PlaceMap(
+                // A new key when the car first appears, so the map opens on it.
+                key: ValueKey(car == null),
+                tiles: ref.watch(mapTilesProvider),
+                center: car ?? trip.pickup,
+                zoom: 14,
+                pins: [
+                  MapPin(point: trip.pickup, label: 'Pickup: ${trip.pickupLabel}'),
+                  MapPin(point: trip.drop, label: 'Drop-off: ${trip.dropLabel}'),
+                  if (car != null) MapPin(point: car, label: trip.isDriver ? 'You' : 'Your driver', highlighted: true),
+                ],
+              ),
             ),
-          ),
-        ),
-      ],
+            Positioned(
+              top: 12,
+              right: 12,
+              child: ListenableBuilder(
+                listenable: _sheet,
+                builder: (context, _) => FloatingActionButton.small(
+                  heroTag: null,
+                  tooltip: _isPeeking ? 'Show details' : 'Full map',
+                  onPressed: _toggle,
+                  child: Icon(_isPeeking ? Icons.fullscreen_exit : Icons.fullscreen),
+                ),
+              ),
+            ),
+            DraggableScrollableSheet(
+              controller: _sheet,
+              initialChildSize: _open,
+              minChildSize: _peekFraction,
+              maxChildSize: 0.85,
+              snap: true,
+              snapSizes: [_peekFraction, _open],
+              builder: (context, scroll) => Material(
+                elevation: 8,
+                color: theme.colorScheme.surface,
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+                clipBehavior: Clip.antiAlias,
+                // Every line built (not lazily), so the actions are always there.
+                child: SingleChildScrollView(
+                  controller: scroll,
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                  child: SafeArea(
+                    top: false,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        // The handle: drag it, or tap it to switch between map and details.
+                        Semantics(
+                          button: true,
+                          label: 'Show or hide ride details',
+                          child: GestureDetector(
+                            behavior: HitTestBehavior.opaque,
+                            onTap: _toggle,
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 10),
+                              child: Center(
+                                child: Container(
+                                  width: 36,
+                                  height: 4,
+                                  decoration: BoxDecoration(
+                                    color: theme.colorScheme.outlineVariant,
+                                    borderRadius: BorderRadius.circular(2),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                        _TripPanel(trip: trip),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 }
@@ -121,9 +227,10 @@ class _TripPanelState extends ConsumerState<_TripPanel> {
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        if (trip.status.isMatching) const LinearProgressIndicator(),
-        if (trip.status.isMatching) const SizedBox(height: 12),
-        Text(headline, style: theme.textTheme.titleLarge),
+        // First, on one line: it's what stays visible when the sheet is
+        // pulled down to show the whole map.
+        Text(headline, style: theme.textTheme.titleLarge, maxLines: 1, overflow: TextOverflow.ellipsis),
+        if (trip.status.isMatching) const Padding(padding: EdgeInsets.only(top: 8), child: LinearProgressIndicator()),
         if (detail != null) Padding(padding: const EdgeInsets.only(top: 4), child: Text(detail)),
         if (driver != null && !trip.isDriver && !trip.status.isOver)
           ListTile(
