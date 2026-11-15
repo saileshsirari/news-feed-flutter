@@ -32,7 +32,13 @@ final choosePlaceProvider = Provider<ChoosePlace>(
         context,
         search: ref.read(placeSearchProvider),
         tiles: ref.read(mapTilesProvider),
-        location: ref.read(locationSourceProvider),
+        // Precise GPS, only when "My location" is tapped: a driver has to
+        // find you, so a pickup rounded to ~1 km (as "near me" uses) won't
+        // do. The exact spot still reaches only the driver who accepts.
+        location: ref.read(pickupLocationProvider),
+        // Less sure than this (approximate location allowed, weak GPS
+        // indoors): ask the rider to drag the pin to the exact spot.
+        approximateBeyondMetres: 150,
         initial: initial,
         near: near,
         title: pickup ? 'Pickup' : 'Drop-off',

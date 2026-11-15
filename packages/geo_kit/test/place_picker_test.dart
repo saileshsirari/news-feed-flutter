@@ -37,15 +37,33 @@ class FakeLocation implements LocationSource {
       };
 }
 
+/// A location that says how sure it is, like GPS (metres) or approximate (a kilometre or two).
+class FakeAccurateLocation implements AccurateLocationSource {
+  FakeAccurateLocation(this.point, this.accuracyMetres);
+  final GeoPoint point;
+  final double accuracyMetres;
+
+  @override
+  Future<GeoPoint> current() async => point;
+
+  @override
+  Future<({GeoPoint point, double accuracyMetres})> currentWithAccuracy() async =>
+      (point: point, accuracyMetres: accuracyMetres);
+}
+
 void main() {
   /// Pumps a button that opens the picker; [result] gets what it returned.
   Future<void> open(WidgetTester tester, FakeSearch search, ValueChanged<Place?> result,
-      {bool areaOnly = false, LocationSource? location}) async {
+      {bool areaOnly = false, LocationSource? location, double? approximateBeyondMetres}) async {
     await tester.pumpWidget(MaterialApp(
       home: Builder(
         builder: (context) => TextButton(
           onPressed: () async => result(await pickPlace(context,
-              search: search, tiles: MapTiles.none, areaOnly: areaOnly, location: location)),
+              search: search,
+              tiles: MapTiles.none,
+              areaOnly: areaOnly,
+              location: location,
+              approximateBeyondMetres: approximateBeyondMetres)),
           child: const Text('pick'),
         ),
       ),
@@ -100,5 +118,27 @@ void main() {
     await tester.tap(find.byTooltip('My location'));
     await tester.pumpAndSettle();
     expect(find.text('Location is switched off on this device.'), findsOneWidget);
+  });
+
+  testWidgets('an exact spot is kept exactly; a rough fix asks to drag the pin', (tester) async {
+    Place? picked;
+    final search = FakeSearch()..reverseAnswer = null;
+    const gps = GeoPoint(28.570123, 77.326456);
+    await open(tester, search, (p) => picked = p, location: FakeAccurateLocation(gps, 8), approximateBeyondMetres: 200);
+    await tester.tap(find.byTooltip('My location'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('approximate'), findsNothing);
+    await tester.tap(find.text('Use this spot'));
+    await tester.pumpAndSettle();
+    expect(picked!.point, gps); // not rounded
+
+    await open(tester, search, (p) => picked = p,
+        location: FakeAccurateLocation(const GeoPoint(28.57, 77.33), 1500), approximateBeyondMetres: 200);
+    await tester.tap(find.byTooltip('My location'));
+    await tester.pumpAndSettle();
+    expect(
+      find.text('Your location is approximate (within about 1.5 km). Drag the map so the pin is on your exact spot.'),
+      findsOneWidget,
+    );
   });
 }

@@ -23,6 +23,15 @@ abstract interface class LocationSource {
   Future<GeoPoint> current();
 }
 
+/// A location source that also says how sure it is: a GPS fix is good to
+/// a few metres; "approximate location" (Android lets people choose it)
+/// only to a kilometre or more. Screens that need the exact spot (a taxi
+/// pickup) use it to say "drag the pin to where you are".
+abstract interface class AccurateLocationSource implements LocationSource {
+  /// The point, and roughly how far off it might be, in metres.
+  Future<({GeoPoint point, double accuracyMetres})> currentWithAccuracy();
+}
+
 /// The device's location, asked for only when the person taps "Near me",
 /// and only roughly:
 ///
@@ -37,14 +46,17 @@ abstract interface class LocationSource {
 /// must see the car move, and the app shares it only during a trip). Needs
 /// the precise-location permission; if the person grants only approximate,
 /// the answer is approximate.
-class DeviceLocation implements LocationSource {
+class DeviceLocation implements AccurateLocationSource {
   const DeviceLocation({this.decimals = 2, this.precise = false});
 
   final int decimals;
   final bool precise;
 
   @override
-  Future<GeoPoint> current() async {
+  Future<GeoPoint> current() async => (await currentWithAccuracy()).point;
+
+  @override
+  Future<({GeoPoint point, double accuracyMetres})> currentWithAccuracy() async {
     if (!await Geolocator.isLocationServiceEnabled()) {
       throw const LocationUnavailable('Location is switched off on this device.', fix: Geolocator.openLocationSettings);
     }
@@ -65,7 +77,10 @@ class DeviceLocation implements LocationSource {
           timeLimit: const Duration(seconds: 15),
         ),
       );
-      return GeoPoint(position.latitude, position.longitude).rounded(decimals);
+      return (
+        point: GeoPoint(position.latitude, position.longitude).rounded(decimals),
+        accuracyMetres: position.accuracy,
+      );
     } on Exception {
       throw const LocationUnavailable('Couldn\'t find where you are. Try again, or pick a place on the map.');
     }

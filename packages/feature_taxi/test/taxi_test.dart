@@ -44,6 +44,7 @@ class FakeTaxiServer {
   /// Razorpay is set up here (the estimate offers paying online).
   bool online = false;
   Map<String, dynamic>? requested;
+  Map<String, dynamic>? estimated;
   int confirmed = 0;
 
   Map<String, dynamic> order() => {
@@ -103,6 +104,7 @@ class FakeTaxiServer {
     final body = request.body.isEmpty ? null : jsonDecode(request.body) as Map<String, dynamic>;
     switch ((request.method, path)) {
       case ('POST', '/taxi/estimate'):
+        estimated = body;
         if ((body!['pickup']['lat'] as num) < 27) return json({'error': 'Taxi isn\'t available here yet.'}, 422);
         return json({
           'area': delhi,
@@ -204,7 +206,13 @@ void main() {
     checkout = FakeCheckout();
   });
 
-  Future<ProviderContainer> show(WidgetTester tester, Widget home, {Place? pickup, Place? drop}) async {
+  Future<ProviderContainer> show(
+    WidgetTester tester,
+    Widget home, {
+    Place? pickup,
+    Place? drop,
+    AccurateLocationSource? gps,
+  }) async {
     useIndianLocale(tester);
     tester.view.physicalSize = const Size(1080, 2400);
     tester.view.devicePixelRatio = 2.5;
@@ -222,10 +230,15 @@ void main() {
           launched.add(link);
           return true;
         }),
-        choosePlaceProvider.overrideWithValue(
-          (context, ref, {required pickup, initial, near}) async =>
-              pickup ? (pickupPlace ?? connaughtPlace) : (dropPlace ?? igiAirport),
-        ),
+        // With [gps], the real map picker (and its "My location"); otherwise places chosen straight away.
+        if (gps != null) ...[
+          pickupLocationProvider.overrideWithValue(gps),
+          placeSearchProvider.overrideWithValue(NoPlaceNames()),
+        ] else
+          choosePlaceProvider.overrideWithValue(
+            (context, ref, {required pickup, initial, near}) async =>
+                pickup ? (pickupPlace ?? connaughtPlace) : (dropPlace ?? igiAirport),
+          ),
       ],
     );
     pickupPlace = pickup;
@@ -332,6 +345,36 @@ void main() {
       expect(find.text('Finding you a driver…'), findsOneWidget);
       // The trip screen tuned in to its live channel.
       expect(socket.watches, anyElement(equals({'type': 'watch_trip', 'tripId': 7})));
+    });
+
+    taxiTest('"My location" for the pickup is precise GPS, kept exactly', (tester) async {
+      const here = GeoPoint(28.570123, 77.326456); // Noida Sector 18, to about a metre
+      await show(tester, const TaxiHomeScreen(), gps: const FakeGps(here, 6));
+      await tester.tap(find.text('Choose pickup'));
+      await settle(tester);
+      await tester.tap(find.byTooltip('My location'));
+      await settle(tester);
+      expect(find.textContaining('approximate'), findsNothing);
+      await tester.tap(find.text('Use this spot'));
+      await settle(tester);
+      // The drop-off, anywhere else on the map (here: where the map opens).
+      await tester.tap(find.text('Where to?'));
+      await settle(tester);
+      await tester.tap(find.text('Use this spot'));
+      await settle(tester);
+      expect(server.estimated!['pickup'], {'lat': 28.570123, 'lng': 77.326456});
+    });
+
+    taxiTest('only approximate location allowed: asks to drag the pin', (tester) async {
+      await show(tester, const TaxiHomeScreen(), gps: const FakeGps(GeoPoint(28.57, 77.33), 2000));
+      await tester.tap(find.text('Choose pickup'));
+      await settle(tester);
+      await tester.tap(find.byTooltip('My location'));
+      await settle(tester);
+      expect(
+        find.text('Your location is approximate (within about 2.0 km). Drag the map so the pin is on your exact spot.'),
+        findsOneWidget,
+      );
     });
 
     taxiTest('outside every area: says so', (tester) async {
@@ -620,6 +663,29 @@ void main() {
 
 Place? pickupPlace;
 Place? dropPlace;
+
+/// The phone's GPS: a point, and how sure it is (metres).
+class FakeGps implements AccurateLocationSource {
+  const FakeGps(this.point, this.accuracyMetres);
+  final GeoPoint point;
+  final double accuracyMetres;
+
+  @override
+  Future<GeoPoint> current() async => point;
+
+  @override
+  Future<({GeoPoint point, double accuracyMetres})> currentWithAccuracy() async =>
+      (point: point, accuracyMetres: accuracyMetres);
+}
+
+/// Place search that knows no names (a dropped pin stays "Dropped pin").
+class NoPlaceNames implements PlaceSearch {
+  @override
+  Future<List<Place>> search(String query, {GeoPoint? near}) async => const [];
+
+  @override
+  Future<Place?> reverse(GeoPoint point) async => null;
+}
 
 /// Razorpay's sheet, answering what the test says.
 class FakeCheckout implements Checkout {

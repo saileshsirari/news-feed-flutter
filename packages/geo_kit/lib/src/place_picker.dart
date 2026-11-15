@@ -21,6 +21,7 @@ Future<Place?> pickPlace(
   GeoPoint? near,
   bool areaOnly = false,
   String? title,
+  double? approximateBeyondMetres,
 }) =>
     Navigator.of(context).push<Place>(
       MaterialPageRoute(
@@ -33,6 +34,7 @@ Future<Place?> pickPlace(
           near: near,
           areaOnly: areaOnly,
           title: title ?? (areaOnly ? 'Choose an area' : 'Choose a place'),
+          approximateBeyondMetres: approximateBeyondMetres,
         ),
       ),
     );
@@ -47,6 +49,7 @@ class PlacePickerScreen extends StatefulWidget {
     this.initial,
     this.near,
     this.areaOnly = false,
+    this.approximateBeyondMetres,
   });
 
   final PlaceSearch search;
@@ -56,6 +59,11 @@ class PlacePickerScreen extends StatefulWidget {
   final GeoPoint? near;
   final bool areaOnly;
   final String title;
+
+  /// When "My location" is less sure than this (the person allowed only
+  /// approximate location, or GPS is weak indoors), say so and ask them to
+  /// drag the pin to the exact spot. Null: don't check (rough is fine).
+  final double? approximateBeyondMetres;
 
   /// Where the map opens with nothing else to go on ([initial], then
   /// [near], the app's rough idea of where you are): the middle of the
@@ -127,13 +135,29 @@ class _PlacePickerScreenState extends State<PlacePickerScreen> {
       _error = null;
     });
     try {
-      _goTo(await widget.location!.current(), zoom: 14);
+      final location = widget.location!;
+      final limit = widget.approximateBeyondMetres;
+      if (limit != null && location is AccurateLocationSource) {
+        final here = await location.currentWithAccuracy();
+        // Street level for a good fix; wider when it's rough, so they can find their spot.
+        _goTo(here.point, zoom: here.accuracyMetres > limit ? 14 : 17);
+        if (here.accuracyMetres > limit) {
+          setState(() => _error = 'Your location is approximate (within about ${_roughly(here.accuracyMetres)}). '
+              'Drag the map so the pin is on your exact spot.');
+        }
+      } else {
+        _goTo(await location.current(), zoom: 14);
+      }
     } on LocationUnavailable catch (e) {
       setState(() => _error = e.message);
     } finally {
       if (mounted) setState(() => _busy = false);
     }
   }
+
+  /// "300 m", "2 km": how far off, said plainly.
+  static String _roughly(double metres) =>
+      metres < 1000 ? '${(metres / 50).round() * 50} m' : '${(metres / 1000).toStringAsFixed(metres < 10000 ? 1 : 0)} km';
 
   /// The place under the pin. A hand-placed pin is named by asking what's
   /// there, once, now (not on every pan).

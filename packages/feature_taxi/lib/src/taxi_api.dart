@@ -138,3 +138,9 @@ final taxiApiProvider = Provider<TaxiApi>(
 /// The driver's own position, precisely (GPS), only while on duty. An
 /// override point for tests and the simulator-free demo.
 final driverLocationProvider = Provider<LocationSource>((_) => const DeviceLocation(decimals: 5, precise: true));
+
+/// "My location" in taxi's place picker: GPS, to ~1 m (5 decimals), and
+/// how sure it is. Taxi only; the rest of the app keeps the ~1 km location.
+final pickupLocationProvider = Provider<AccurateLocationSource>(
+  (_) => const DeviceLocation(decimals: 5, precise: true),
+);
