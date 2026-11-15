@@ -5,6 +5,7 @@ import 'package:app_core/session/current_user_provider.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geo_kit/geo_kit.dart';
+import 'package:payments_kit/payments_kit.dart';
 
 import 'models.dart';
 import 'taxi_api.dart';
@@ -61,6 +62,37 @@ class TripController extends AsyncNotifier<Trip> {
   /// Cancels the ride (riders before it starts, drivers before pickup).
   Future<void> cancel() async {
     final trip = await ref.read(taxiApiProvider).cancel(tripId);
+    if (ref.mounted) state = AsyncData(trip);
+  }
+
+  /// Pays the fare online, the way tickets are paid: an order from the
+  /// server, Razorpay's sheet, then the server checks the sheet's signed
+  /// answer (the app never decides it paid). Returns what to tell the
+  /// person when it didn't go through, or null.
+  Future<String?> payOnline() async {
+    final order = await ref.read(taxiApiProvider).pay(tripId);
+    final options = order.checkoutOptions;
+    if (options == null) {
+      await reload();
+      return 'This ride can\'t be paid online right now.';
+    }
+    final checkout = ref.read(checkoutProvider);
+    final payments = ref.read(paymentsApiProvider);
+    switch (await checkout.open(options)) {
+      case final CheckoutPaid paid:
+        await payments.confirm(order.id, paid);
+        await reload();
+        return null;
+      case CheckoutCancelled():
+        return null;
+      case CheckoutFailed(:final message):
+        return 'The payment didn\'t go through ($message). Nothing was charged.';
+    }
+  }
+
+  /// Pays the driver in cash instead.
+  Future<void> payInCash() async {
+    final trip = await ref.read(taxiApiProvider).payInCash(tripId);
     if (ref.mounted) state = AsyncData(trip);
   }
 

@@ -21,7 +21,9 @@ dependencies:
     path: ../geo_kit
   http: ^1.2.2
   intl: ^0.20.3
-  razorpay_flutter: ^1.4.7
+  # Paying for tickets: the checkout sheet and orders, shared with taxi.
+  payments_kit:
+    path: ../payments_kit
   shared_media:
     path: ../shared_media
   url_launcher: ^6.3.3

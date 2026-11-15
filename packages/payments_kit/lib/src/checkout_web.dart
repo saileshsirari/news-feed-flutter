@@ -4,7 +4,7 @@ import 'dart:js_interop_unsafe';
 
 import 'package:web/web.dart' as web;
 
-import 'package:feature_communities/payments/checkout.dart';
+import 'checkout.dart';
 
 Checkout platformCheckout() => _CheckoutJs();
 

@@ -19,6 +19,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:geo_kit/geo_kit.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
+import 'package:payments_kit/payments_kit.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 const connaughtPlace = Place(name: 'Connaught Place', point: GeoPoint(28.6315, 77.2167));
@@ -39,6 +40,27 @@ class FakeTaxiServer {
   Map<String, dynamic>? trip;
   Map<String, dynamic>? vehicle;
   Map<String, dynamic>? offer;
+
+  /// Razorpay is set up here (the estimate offers paying online).
+  bool online = false;
+  Map<String, dynamic>? requested;
+  int confirmed = 0;
+
+  Map<String, dynamic> order() => {
+    'id': 1,
+    'purpose': 'taxi_fare',
+    'itemId': 7,
+    'description': 'Taxi ride',
+    'amountMinor': 39600,
+    'currency': 'INR',
+    'status': 'pending',
+    'createdAt': 0,
+    'expiresAt': 86400000,
+    'checkout': {
+      'provider': 'razorpay',
+      'options': {'key': 'rzp_test_x', 'order_id': 'order_1', 'amount': 39600},
+    },
+  };
 
   Map<String, dynamic> newTrip({required String status, bool asDriver = false}) => trip = {
     'id': 7,
@@ -88,10 +110,24 @@ class FakeTaxiServer {
           'durationS': 3123,
           'fare': fare,
           'routing': 'straight-line',
-          'payment': 'cash',
+          'payments': ['cash', if (online) 'online'],
         });
       case ('POST', '/taxi/trips'):
-        return json(newTrip(status: 'offered'), 201);
+        requested = body;
+        return json(newTrip(status: 'offered')..['payment'] = body!['payment'], 201);
+      case ('POST', '/taxi/trips/7/pay'):
+        return json({'trip': trip, 'order': order()});
+      case ('POST', '/payments/orders/1/confirm'):
+        confirmed++;
+        trip!
+          ..['paidAt'] = 1
+          ..['canPayOnline'] = false;
+        return json(order()..['status'] = 'paid');
+      case ('POST', '/taxi/trips/7/pay-cash'):
+        trip!
+          ..['payment'] = 'cash'
+          ..['canPayOnline'] = false;
+        return json(trip);
       case ('GET', '/taxi/trips/active'):
         final going = trip != null && !['completed', 'cancelled'].contains(trip!['status']);
         return json(going ? trip : null);
@@ -158,12 +194,14 @@ void main() {
   late FakeTaxiServer server;
   late FakeSocket socket;
   late List<Uri> launched;
+  late FakeCheckout checkout;
 
   setUp(() {
     SharedPreferences.setMockInitialValues({'id': 1, 'username': 'me', 'followerCount': 0});
     server = FakeTaxiServer();
     socket = FakeSocket();
     launched = [];
+    checkout = FakeCheckout();
   });
 
   Future<ProviderContainer> show(WidgetTester tester, Widget home, {Place? pickup, Place? drop}) async {
@@ -179,6 +217,7 @@ void main() {
         driverLocationProvider.overrideWithValue(const FixedLocation(GeoPoint(28.632, 77.219))),
         driverPingIntervalProvider.overrideWithValue(const Duration(seconds: 4)),
         // A phone with Google Maps: the first link opens.
+        checkoutProvider.overrideWithValue(checkout),
         linkLauncherProvider.overrideWithValue((link) async {
           launched.add(link);
           return true;
@@ -285,7 +324,7 @@ void main() {
 
       expect(find.text('₹396'), findsOneWidget);
       expect(find.textContaining('19 km · about 53 min · Delhi NCR'), findsOneWidget);
-      expect(find.textContaining('Paid in cash'), findsOneWidget);
+      expect(find.text('Pay in cash to your driver.'), findsOneWidget);
 
       await tester.tap(find.text('Request ride · ₹396'));
       await settle(tester);
@@ -374,6 +413,67 @@ void main() {
       await tester.pumpAndSettle();
       expect(onScreen(find.text(car)), isTrue);
       expect(find.byTooltip('Full map'), findsOneWidget);
+    });
+
+    taxiTest('choosing to pay online when booking (where it\'s offered)', (tester) async {
+      server.online = true;
+      await show(tester, const TaxiHomeScreen());
+      await tester.tap(find.text('Choose pickup'));
+      await settle(tester);
+      await tester.tap(find.text('Where to?'));
+      await settle(tester);
+      await tester.tap(find.text('UPI / card'));
+      await settle(tester);
+      expect(find.text('You pay after the ride, in the app.'), findsOneWidget);
+      await tester.tap(find.text('Request ride · ₹396'));
+      await settle(tester);
+      expect(server.requested!['payment'], 'online');
+    });
+
+    Map<String, dynamic> finishedOnline() => server.newTrip(status: 'completed')
+      ..['payment'] = 'online'
+      ..['paidAt'] = null
+      ..['canPayOnline'] = true;
+
+    taxiTest('after the ride: pay online through Razorpay\'s sheet; the server confirms', (tester) async {
+      finishedOnline();
+      await show(tester, const TripScreen(tripId: 7));
+      expect(find.text('Pay ₹396 online, or in cash to your driver.'), findsOneWidget);
+      checkout.answer = const CheckoutPaid(paymentId: 'pay_1', orderId: 'order_1', signature: 'sig');
+      await tester.tap(find.text('Pay ₹396 online'));
+      await settle(tester);
+      // The sheet got the server's options; the app passed the signed answer back to be checked.
+      expect(checkout.opened.single['order_id'], 'order_1');
+      expect(server.confirmed, 1);
+      expect(find.text('Paid, thank you'), findsOneWidget);
+      expect(find.text('You paid ₹396 online.'), findsOneWidget);
+      expect(find.text('Pay ₹396 online'), findsNothing);
+    });
+
+    taxiTest('a failed payment says so; the rider can pay cash instead', (tester) async {
+      finishedOnline();
+      await show(tester, const TripScreen(tripId: 7));
+      checkout.answer = const CheckoutFailed('Card declined');
+      await tester.tap(find.text('Pay ₹396 online'));
+      await settle(tester);
+      expect(find.text('The payment didn\'t go through (Card declined). Nothing was charged.'), findsOneWidget);
+      expect(server.confirmed, 0);
+
+      await tester.tap(find.text('Pay in cash instead'));
+      await settle(tester);
+      expect(find.text('Please pay ₹396 in cash.'), findsOneWidget);
+    });
+
+    taxiTest('the driver sees whether there\'s cash to collect', (tester) async {
+      server.newTrip(status: 'completed', asDriver: true)
+        ..['payment'] = 'online'
+        ..['paidAt'] = null;
+      await show(tester, const TripScreen(tripId: 7));
+      expect(find.text('Asha is paying ₹396 online. If they can\'t, collect it in cash.'), findsOneWidget);
+      server.trip!['paidAt'] = 1;
+      socket.controller.add({'type': 'taxi_trip', 'tripId': 7, 'status': 'completed'});
+      await settle(tester);
+      expect(find.text('Paid ₹396 online. Nothing to collect.'), findsOneWidget);
     });
 
     taxiTest('no drivers nearby', (tester) async {
@@ -520,6 +620,18 @@ void main() {
 
 Place? pickupPlace;
 Place? dropPlace;
+
+/// Razorpay's sheet, answering what the test says.
+class FakeCheckout implements Checkout {
+  CheckoutResult answer = const CheckoutCancelled();
+  final opened = <Map<String, dynamic>>[];
+
+  @override
+  Future<CheckoutResult> open(Map<String, dynamic> options) async {
+    opened.add(options);
+    return answer;
+  }
+}
 
 /// The container [show] made, closed after each test: closing it stops the
 /// driver's ping timer and the live watches, as leaving the mini-app does.

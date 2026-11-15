@@ -2,7 +2,7 @@ import 'dart:async';
 
 import 'package:razorpay_flutter/razorpay_flutter.dart';
 
-import 'package:feature_communities/payments/checkout.dart';
+import 'checkout.dart';
 
 Checkout platformCheckout() => _RazorpayCheckout();
 

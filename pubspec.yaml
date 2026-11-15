@@ -42,8 +42,8 @@ dependencies:
   #   feature_chat         chat, end-to-end encryption, calls
   #   feature_communities  communities, events, near me, tickets
   #   feature_taxi         rides: request, live tracking, driver mode
-  # (They use the older shared packages: shared_media, oidc_auth,
-  # chat_store, mls_crypto, geo_kit.)
+  # (They use the shared packages: shared_media, oidc_auth, chat_store,
+  # mls_crypto, geo_kit, and payments_kit for paying: tickets, taxi fares.)
   app_core:
     path: packages/app_core
   feature_feed:

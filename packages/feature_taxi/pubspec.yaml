@@ -19,6 +19,9 @@ dependencies:
     path: ../geo_kit
   http: ^1.2.2
   intl: ^0.20.3
+  # Paying online after a ride (Razorpay's sheet, orders), shared with communities.
+  payments_kit:
+    path: ../payments_kit
   # The driver's Navigate button opens the phone's maps app.
   url_launcher: ^6.3.3
 

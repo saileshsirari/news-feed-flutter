@@ -251,7 +251,8 @@ class _TripPanelState extends ConsumerState<_TripPanel> {
         const SizedBox(height: 8),
         Text('${trip.pickupLabel}  →  ${trip.dropLabel}', style: theme.textTheme.bodyMedium),
         Text(
-          '${formatDistance(trip.distanceM / 1000)} · ${formatDuration(trip.durationS)} · ${trip.fare} · Cash',
+          '${formatDistance(trip.distanceM / 1000)} · ${formatDuration(trip.durationS)} · ${trip.fare} · '
+          '${trip.payment == PaymentMethod.online ? 'Online' : 'Cash'}',
           style: theme.textTheme.bodySmall,
         ),
         const SizedBox(height: 12),
@@ -271,7 +272,14 @@ class _TripPanelState extends ConsumerState<_TripPanel> {
         ),
         TripStatus.arriving => ('Waiting for ${trip.riderName ?? 'your rider'}', 'Start the ride once they\'re in.'),
         TripStatus.inProgress => ('On the way to ${trip.dropLabel}', null),
-        TripStatus.completed => ('Ride complete', 'Collect ${trip.fare} in cash.'),
+        TripStatus.completed => switch (trip) {
+          Trip(isPaidOnline: true) => ('Ride complete', 'Paid ${trip.fare} online. Nothing to collect.'),
+          Trip(payment: PaymentMethod.online) => (
+            'Ride complete',
+            '${trip.riderName ?? 'The rider'} is paying ${trip.fare} online. If they can\'t, collect it in cash.',
+          ),
+          _ => ('Ride complete', 'Collect ${trip.fare} in cash.'),
+        },
         TripStatus.cancelled => ('Ride cancelled', trip.cancelReason),
         _ => ('Ride offered', null),
       };
@@ -282,7 +290,11 @@ class _TripPanelState extends ConsumerState<_TripPanel> {
       TripStatus.accepted => ('${trip.driver?.name ?? 'Your driver'} is on the way', eta),
       TripStatus.arriving => ('Your driver is here', 'Look for ${trip.driver?.plate ?? 'your car'}.'),
       TripStatus.inProgress => ('On the way to ${trip.dropLabel}', null),
-      TripStatus.completed => ('You\'ve arrived', 'Please pay ${trip.fare} in cash.'),
+      TripStatus.completed => switch (trip) {
+        Trip(isPaidOnline: true) => ('Paid, thank you', 'You paid ${trip.fare} online.'),
+        Trip(canPayOnline: true) => ('You\'ve arrived', 'Pay ${trip.fare} online, or in cash to your driver.'),
+        _ => ('You\'ve arrived', 'Please pay ${trip.fare} in cash.'),
+      },
       TripStatus.cancelled => switch (trip.cancelledBy) {
         'system' => ('No drivers nearby', 'Nobody could take this ride. Try again in a few minutes.'),
         'driver' => ('Your driver cancelled', 'Sorry about that. You can ask for another ride.'),
@@ -333,9 +345,27 @@ class _TripPanelState extends ConsumerState<_TripPanel> {
         if (trip.status.isOver) FilledButton(onPressed: () => Navigator.pop(context), child: const Text('Done')),
       ];
     }
+    if (trip.canPayOnline) {
+      return [
+        FilledButton.icon(
+          onPressed: _busy ? null : _payOnline,
+          icon: const Icon(Icons.payment),
+          label: Text('Pay ${trip.fare} online'),
+        ),
+        const SizedBox(height: 8),
+        TextButton(onPressed: _busy ? null : () => _do((c) => c.payInCash()), child: const Text('Pay in cash instead')),
+      ];
+    }
     return [
       if (!trip.status.isOver && trip.status != TripStatus.inProgress) cancel,
       if (trip.status.isOver) FilledButton(onPressed: () => Navigator.pop(context), child: const Text('Done')),
     ];
+  }
+
+  /// Razorpay's sheet (UPI, card); a message if it didn't go through.
+  Future<void> _payOnline() async {
+    String? problem;
+    await _do((c) async => problem = await c.payOnline());
+    if (problem != null && mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(problem!)));
   }
 }

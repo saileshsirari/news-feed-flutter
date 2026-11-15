@@ -99,6 +99,7 @@ class _RidePanelState extends ConsumerState<_RidePanel> {
   Place? _pickup;
   Place? _drop;
   Estimate? _estimate;
+  PaymentMethod _payment = PaymentMethod.cash;
   String? _error;
   bool _busy = false;
 
@@ -140,7 +141,8 @@ class _RidePanelState extends ConsumerState<_RidePanel> {
   Future<void> _request() async {
     setState(() => _busy = true);
     try {
-      final trip = await ref.read(taxiApiProvider).request(_pickup!, _drop!);
+      final payment = _estimate?.canPayOnline ?? false ? _payment : PaymentMethod.cash;
+      final trip = await ref.read(taxiApiProvider).request(_pickup!, _drop!, payment: payment);
       if (!mounted) return;
       setState(() {
         _estimate = null;
@@ -207,10 +209,28 @@ class _RidePanelState extends ConsumerState<_RidePanel> {
           const SizedBox(height: 4),
           Text(
             estimate.routing == 'straight-line'
-                ? 'Paid in cash. A rough estimate from the distance; this is the price you pay.'
-                : 'Paid in cash. This is the price you pay.',
+                ? 'A rough estimate from the distance; this is the price you pay.'
+                : 'This is the price you pay.',
             style: theme.textTheme.bodySmall,
           ),
+          const SizedBox(height: 16),
+          // How to pay: cash always; online (Razorpay: UPI, card) where it's set up.
+          if (estimate.canPayOnline)
+            SegmentedButton<PaymentMethod>(
+              segments: const [
+                ButtonSegment(value: PaymentMethod.cash, icon: Icon(Icons.payments_outlined), label: Text('Cash')),
+                ButtonSegment(value: PaymentMethod.online, icon: Icon(Icons.qr_code), label: Text('UPI / card')),
+              ],
+              selected: {_payment},
+              onSelectionChanged: (s) => setState(() => _payment = s.single),
+            )
+          else
+            Text('Pay in cash to your driver.', style: theme.textTheme.bodyMedium),
+          if (estimate.canPayOnline && _payment == PaymentMethod.online)
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Text('You pay after the ride, in the app.', style: theme.textTheme.bodySmall),
+            ),
           const SizedBox(height: 16),
           FilledButton.icon(
             onPressed: active != null ? null : _request,

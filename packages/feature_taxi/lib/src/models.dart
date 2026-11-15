@@ -70,6 +70,7 @@ class Estimate {
     required this.durationS,
     required this.fare,
     required this.routing,
+    this.canPayOnline = false,
   });
 
   final TaxiArea area;
@@ -80,14 +81,22 @@ class Estimate {
   /// "straight-line" means a rough guess from the distance as the crow flies.
   final String routing;
 
+  /// Online payment (UPI, card) is offered here: Razorpay takes this
+  /// area's money and the server has it set up. Cash is always possible.
+  final bool canPayOnline;
+
   factory Estimate.fromJson(Map<String, dynamic> json) => Estimate(
     area: TaxiArea.fromJson(json['area'] as Map<String, dynamic>),
     distanceM: json['distanceM'] as int,
     durationS: json['durationS'] as int,
     fare: Fare.fromJson(json['fare'] as Map<String, dynamic>),
     routing: json['routing'] as String? ?? 'straight-line',
+    canPayOnline: (json['payments'] as List?)?.contains('online') ?? false,
   );
 }
+
+/// How a ride is paid: cash to the driver, or online after the ride.
+enum PaymentMethod { cash, online }
 
 /// A trip's life, as the server's state machine has it (see docs/TAXI.md).
 enum TripStatus {
@@ -154,6 +163,9 @@ class Trip {
     this.pickupEtaS,
     this.riderName,
     this.driverHeading,
+    this.payment = PaymentMethod.cash,
+    this.paidAt,
+    this.canPayOnline = false,
   });
 
   final int id;
@@ -185,6 +197,17 @@ class Trip {
   /// Which way the car last moved (compass degrees, 0 = north), worked out
   /// on the phone from its last two positions; null before it has moved.
   final double? driverHeading;
+
+  final PaymentMethod payment;
+
+  /// When it was paid online (null: not yet, or in cash).
+  final DateTime? paidAt;
+
+  /// The rider can pay online now (an online ride, over, not paid yet).
+  final bool canPayOnline;
+
+  /// Paid online; nothing for the driver to collect.
+  bool get isPaidOnline => paidAt != null;
 
   /// Which way to draw the car: the way it last moved, or else towards
   /// where it's going next (the pickup, then the drop-off).
@@ -223,6 +246,9 @@ class Trip {
       driverLocation: json['driverLocation'] == null ? null : point(json['driverLocation']),
       pickupEtaS: json['pickupEtaS'] as int?,
       riderName: (json['rider'] as Map<String, dynamic>?)?['name'] as String?,
+      payment: json['payment'] == 'online' ? PaymentMethod.online : PaymentMethod.cash,
+      paidAt: time(json['paidAt']),
+      canPayOnline: json['canPayOnline'] == true,
     );
   }
 
@@ -251,6 +277,9 @@ class Trip {
     driverHeading: driverLocation != null && driverLocation!.distanceKm(p) > 0.005
         ? bearing(driverLocation!, p)
         : driverHeading,
+    payment: payment,
+    paidAt: paidAt,
+    canPayOnline: canPayOnline,
   );
 
   /// "Connaught Place", or the spot's coordinates when it had no name.

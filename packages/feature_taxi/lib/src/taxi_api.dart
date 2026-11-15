@@ -7,6 +7,7 @@ import 'package:app_core/session/current_user_provider.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geo_kit/geo_kit.dart';
 import 'package:http/http.dart' as http;
+import 'package:payments_kit/payments_kit.dart';
 
 import 'models.dart';
 
@@ -63,12 +64,23 @@ class TaxiApi {
     (await _send('POST', '/taxi/estimate', {'pickup': _place(pickup), 'drop': _place(drop)}))! as Map<String, dynamic>,
   );
 
-  Future<Trip> request(Place pickup, Place drop) async => _trip(
+  Future<Trip> request(Place pickup, Place drop, {PaymentMethod payment = PaymentMethod.cash}) async => _trip(
     await _send('POST', '/taxi/trips', {
       'pickup': _place(pickup.point, pickup.name),
       'drop': _place(drop.point, drop.name),
+      'payment': payment.name,
     }),
   );
+
+  /// An order for a finished online ride's fare: open its checkout options
+  /// in the payment sheet, then confirm through the payments routes.
+  Future<PaymentOrder> pay(int tripId) async {
+    final json = (await _send('POST', '/taxi/trips/$tripId/pay'))! as Map<String, dynamic>;
+    return PaymentOrder.fromJson(json['order'] as Map<String, dynamic>);
+  }
+
+  /// Pay the driver in cash instead.
+  Future<Trip> payInCash(int tripId) async => _trip(await _send('POST', '/taxi/trips/$tripId/pay-cash'));
 
   Future<Trip> cancel(int tripId) async => _trip(await _send('POST', '/taxi/trips/$tripId/cancel'));
 
