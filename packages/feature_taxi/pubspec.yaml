@@ -19,6 +19,8 @@ dependencies:
     path: ../geo_kit
   http: ^1.2.2
   intl: ^0.20.3
+  # The driver's Navigate button opens the phone's maps app.
+  url_launcher: ^6.3.3
 
 dev_dependencies:
   flutter_test:

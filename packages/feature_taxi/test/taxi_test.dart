@@ -9,6 +9,7 @@ import 'package:app_core/testing/fake_socket.dart';
 import 'package:feature_taxi/feature_taxi.dart';
 import 'package:feature_taxi/src/car_marker.dart';
 import 'package:feature_taxi/src/models.dart';
+import 'package:feature_taxi/src/navigation_link.dart';
 import 'package:feature_taxi/src/taxi_api.dart';
 import 'package:feature_taxi/src/taxi_controllers.dart';
 import 'package:feature_taxi/src/taxi_home_screen.dart';
@@ -156,11 +157,13 @@ void useIndianLocale(WidgetTester tester) {
 void main() {
   late FakeTaxiServer server;
   late FakeSocket socket;
+  late List<Uri> launched;
 
   setUp(() {
     SharedPreferences.setMockInitialValues({'id': 1, 'username': 'me', 'followerCount': 0});
     server = FakeTaxiServer();
     socket = FakeSocket();
+    launched = [];
   });
 
   Future<ProviderContainer> show(WidgetTester tester, Widget home, {Place? pickup, Place? drop}) async {
@@ -175,6 +178,11 @@ void main() {
         mapTilesProvider.overrideWithValue(MapTiles.none),
         driverLocationProvider.overrideWithValue(const FixedLocation(GeoPoint(28.632, 77.219))),
         driverPingIntervalProvider.overrideWithValue(const Duration(seconds: 4)),
+        // A phone with Google Maps: the first link opens.
+        linkLauncherProvider.overrideWithValue((link) async {
+          launched.add(link);
+          return true;
+        }),
         choosePlaceProvider.overrideWithValue(
           (context, ref, {required pickup, initial, near}) async =>
               pickup ? (pickupPlace ?? connaughtPlace) : (dropPlace ?? igiAirport),
@@ -201,6 +209,32 @@ void main() {
       // Germany puts a (no-break) space before the euro sign.
       expect(const Fare(2150, 'EUR').format(locale: 'de_DE').replaceAll('\u00a0', ' '), '21,50 €');
       expect(const Fare(1925, 'USD').format(locale: 'en_US'), '\$19.25');
+    });
+
+    test('directions links: Google Maps on Android, Apple Maps on iPhone, the web link everywhere', () async {
+      const igi = GeoPoint(28.5562, 77.1);
+      final android = navigationLinks(igi, platform: TargetPlatform.android, isWeb: false);
+      expect(android.map((u) => u.toString()), [
+        'google.navigation:q=28.5562,77.1&mode=d',
+        'https://www.google.com/maps/dir/?api=1&destination=28.5562%2C77.1&travelmode=driving&dir_action=navigate',
+      ]);
+      final iphone = navigationLinks(igi, platform: TargetPlatform.iOS, isWeb: false);
+      expect(iphone.first.toString(), 'https://maps.apple.com/?daddr=28.5562%2C77.1&dirflg=d');
+      expect(navigationLinks(igi, platform: TargetPlatform.android, isWeb: true), [android.last]);
+
+      // No Google Maps app: the next link (the browser) is tried.
+      final tried = <Uri>[];
+      final opened = await openDirections(
+        (link) async {
+          tried.add(link);
+          return link.scheme == 'https';
+        },
+        igi,
+        platform: TargetPlatform.android,
+      );
+      expect(opened, isTrue);
+      expect(tried, hasLength(2));
+      expect(await openDirections((_) async => false, igi, platform: TargetPlatform.android), isFalse);
     });
 
     test('compass bearings', () {
@@ -433,6 +467,10 @@ void main() {
       expect(server.asked, contains('POST /taxi/trips/7/accept'));
       expect(find.text('Drive to the pickup'), findsOneWidget);
       expect(find.text('Picking up Asha at Connaught Place.'), findsOneWidget);
+      // Directions to the exact pickup, in the phone's maps app (the test runs as Android).
+      await tester.tap(find.text('Navigate to pickup'));
+      await settle(tester);
+      expect(launched.single.toString(), 'google.navigation:q=28.6315,77.2167&mode=d');
 
       await tester.tap(find.text('I\'ve arrived'));
       await settle(tester);
@@ -440,6 +478,9 @@ void main() {
       await tester.tap(find.text('Start ride'));
       await settle(tester);
       expect(find.text('On the way to IGI Airport T3'), findsOneWidget);
+      await tester.tap(find.text('Navigate to drop-off'));
+      await settle(tester);
+      expect(launched.last.toString(), 'google.navigation:q=28.5562,77.1&mode=d');
       await tester.tap(find.text('Complete ride'));
       await settle(tester);
       expect(find.text('Collect ₹396 in cash.'), findsOneWidget);

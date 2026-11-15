@@ -5,6 +5,7 @@ import 'package:geo_kit/geo_kit.dart';
 
 import 'car_marker.dart';
 import 'models.dart';
+import 'navigation_link.dart';
 import 'taxi_api.dart';
 import 'taxi_controllers.dart';
 
@@ -290,6 +291,15 @@ class _TripPanelState extends ConsumerState<_TripPanel> {
     };
   }
 
+  /// Turn-by-turn directions in the phone's maps app (see navigation_link.dart).
+  Future<void> _navigate(GeoPoint to) async {
+    final opened = await openDirections(ref.read(linkLauncherProvider), to, platform: Theme.of(context).platform);
+    if (!opened && mounted) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('Couldn\'t open a maps app on this device.')));
+    }
+  }
+
   List<Widget> _actions(Trip trip) {
     final cancel = OutlinedButton(onPressed: _busy ? null : _cancel, child: const Text('Cancel ride'));
     if (trip.isDriver) {
@@ -299,7 +309,21 @@ class _TripPanelState extends ConsumerState<_TripPanel> {
         TripStatus.inProgress => ('complete', 'Complete ride'),
         _ => null,
       };
+      // Where to drive next: the pickup, then (with the rider in) the drop-off.
+      final driveTo = switch (trip.status) {
+        TripStatus.accepted => (trip.pickup, 'Navigate to pickup'),
+        TripStatus.inProgress => (trip.drop, 'Navigate to drop-off'),
+        _ => null,
+      };
       return [
+        if (driveTo != null) ...[
+          FilledButton.tonalIcon(
+            onPressed: () => _navigate(driveTo.$1),
+            icon: const Icon(Icons.navigation),
+            label: Text(driveTo.$2),
+          ),
+          const SizedBox(height: 8),
+        ],
         if (next != null)
           FilledButton(onPressed: _busy ? null : () => _do((c) => c.advance(next.$1)), child: Text(next.$2)),
         if (trip.status == TripStatus.accepted || trip.status == TripStatus.arriving) ...[
