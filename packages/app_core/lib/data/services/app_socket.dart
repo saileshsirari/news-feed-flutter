@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+
 import 'package:web_socket_channel/web_socket_channel.dart';
 import 'package:app_core/config/app_config.dart';
 
@@ -75,6 +76,38 @@ class AppSocket {
     _send({'type': 'unwatch_post', 'postId': postId});
   }
 
+  /// Other live channels the server offers (taxi's trips and offers), by
+  /// their watch message, with how many listeners want each. Like
+  /// [watchPost], but for any `{"type": "watch_...", ...}` message: sent
+  /// when the first listener starts, [unwatch] when the last one stops, and
+  /// sent again after every reconnect.
+  final _watches = <String, ({Map<String, Object?> unwatch, int count})>{};
+
+  /// Starts [watch] (e.g. `{"type": "watch_trip", "tripId": 7}`) and returns
+  /// a function that stops it (sending [unwatch] if nobody else wants it).
+  void Function() watch(Map<String, Object?> watch, Map<String, Object?> unwatch) {
+    final key = jsonEncode(watch);
+    final existing = _watches[key];
+    _watches[key] = (unwatch: unwatch, count: (existing?.count ?? 0) + 1);
+    if (existing == null) _send(watch);
+    var stopped = false;
+    return () {
+      if (stopped) return;
+      stopped = true;
+      final current = _watches[key];
+      if (current == null) return;
+      if (current.count > 1) {
+        _watches[key] = (unwatch: current.unwatch, count: current.count - 1);
+        return;
+      }
+      _watches.remove(key);
+      _send(current.unwatch);
+    };
+  }
+
+  /// The watch messages in force (tests).
+  Iterable<Map<String, Object?>> get watches => _watches.keys.map((k) => jsonDecode(k) as Map<String, Object?>);
+
   /// Best effort: if not connected now, the reconnect sends the watches anyway.
   void _send(Map<String, Object?> message) {
     try {
@@ -113,6 +146,9 @@ class AppSocket {
         // A new connection starts with no watches on the server: ask again.
         for (final postId in _watchedPosts.keys) {
           _send({'type': 'watch_post', 'postId': postId});
+        }
+        for (final key in _watches.keys) {
+          _send(jsonDecode(key) as Map<String, Object?>);
         }
         if (_hasConnectedBefore) _controller.add(const {'type': 'reconnected'});
         _hasConnectedBefore = true;

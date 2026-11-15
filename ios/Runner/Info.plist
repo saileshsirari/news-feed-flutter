@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>To show events and communities near you. Only your rough area (about a kilometre) is used, and it isn't saved.</string>
+	<string>To show events and communities near you (only your rough area, about a kilometre, not saved), and, in Taxi's driver mode, to show your rider where your car is during a trip.</string>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
 	<key>CFBundleDevelopmentRegion</key>

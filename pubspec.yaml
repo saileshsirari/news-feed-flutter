@@ -1,5 +1,5 @@
 name: news_feed_flutter
-description: "A super app: feed, chat and communities as mini-apps on one Home grid."
+description: "A super app: feed, chat, communities and taxi as mini-apps on one Home grid."
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
 publish_to: 'none' # Remove this line if you wish to publish to pub.dev
@@ -41,6 +41,7 @@ dependencies:
   #   feature_feed         posts, comments, profiles
   #   feature_chat         chat, end-to-end encryption, calls
   #   feature_communities  communities, events, near me, tickets
+  #   feature_taxi         rides: request, live tracking, driver mode
   # (They use the older shared packages: shared_media, oidc_auth,
   # chat_store, mls_crypto, geo_kit.)
   app_core:
@@ -51,6 +52,8 @@ dependencies:
     path: packages/feature_chat
   feature_communities:
     path: packages/feature_communities
+  feature_taxi:
+    path: packages/feature_taxi
   # main.dart's background push handler.
   firebase_messaging: ^17.0.1
 

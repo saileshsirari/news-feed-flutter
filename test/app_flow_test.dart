@@ -87,7 +87,7 @@ void main() {
 
     // Home: a tile per mini-app (the fake server has no /config/apps, so
     // all of them), and chat already listening for messages and calls.
-    expect(find.byType(MiniAppTile), findsNWidgets(3));
+    expect(find.byType(MiniAppTile), findsNWidgets(4)); // feed, chat, communities, taxi
     expect(socket.controller.hasListener, isTrue);
 
     // The feed, for user_0, full screen; back is Home.

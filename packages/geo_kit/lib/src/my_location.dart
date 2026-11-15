@@ -32,10 +32,16 @@ abstract interface class LocationSource {
 /// * Then rounded to [decimals] places (2: about a kilometre) before
 ///   anything else in the app sees it, so even our own server only ever
 ///   learns "around Indiranagar".
+///
+/// [precise]: GPS, for a taxi driver's position while on duty (the rider
+/// must see the car move, and the app shares it only during a trip). Needs
+/// the precise-location permission; if the person grants only approximate,
+/// the answer is approximate.
 class DeviceLocation implements LocationSource {
-  const DeviceLocation({this.decimals = 2});
+  const DeviceLocation({this.decimals = 2, this.precise = false});
 
   final int decimals;
+  final bool precise;
 
   @override
   Future<GeoPoint> current() async {
@@ -54,7 +60,10 @@ class DeviceLocation implements LocationSource {
     }
     try {
       final position = await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(accuracy: LocationAccuracy.low, timeLimit: Duration(seconds: 15)),
+        locationSettings: LocationSettings(
+          accuracy: precise ? LocationAccuracy.high : LocationAccuracy.low,
+          timeLimit: const Duration(seconds: 15),
+        ),
       );
       return GeoPoint(position.latitude, position.longitude).rounded(decimals);
     } on Exception {

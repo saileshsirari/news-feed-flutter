@@ -24,6 +24,9 @@ abstract final class AppLinks {
 
   static Uri event(int eventId) => Uri(scheme: 'app', host: 'communities', path: '/event/$eventId');
 
+  /// A taxi ride (as its rider or its driver).
+  static Uri ride(int tripId) => Uri(scheme: 'app', host: 'taxi', path: '/ride/$tripId');
+
   /// The number after `/<screen>/` in [link], if [link] is that screen.
   static int? idOf(Uri link, String screen) {
     final parts = link.pathSegments;

@@ -1,0 +1,28 @@
+name: feature_taxi
+description: "The taxi mini-app: ask for a ride, watch the car come, and a simple driver mode."
+publish_to: 'none'
+version: 0.1.0
+
+environment:
+  sdk: ^3.13.4
+
+# app_core (sign-in, API address, socket, map settings) and geo_kit (map,
+# place picker, location). Nothing from the other mini-apps.
+dependencies:
+  flutter:
+    sdk: flutter
+  app_core:
+    path: ../app_core
+  flutter_map: ^8.3.2
+  flutter_riverpod: ^3.4.3
+  geo_kit:
+    path: ../geo_kit
+  http: ^1.2.2
+  intl: ^0.20.3
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+  flutter_secure_storage: ^11.2.0
+  shared_preferences: ^2.3.3

@@ -332,6 +332,13 @@ packages:
       relative: true
     source: path
     version: "0.1.0"
+  feature_taxi:
+    dependency: "direct main"
+    description:
+      path: "packages/feature_taxi"
+      relative: true
+    source: path
+    version: "0.1.0"
   ffi:
     dependency: transitive
     description:

@@ -1,6 +1,6 @@
 # The super app: mini-apps on a Home grid
 
-The app is a set of **mini-apps** (feed, chat, communities; taxi next) on a
+The app is a set of **mini-apps** (feed, chat, communities, taxi) on a
 shared **core**. Think of a shopping mall: the core is the building (doors,
 lights, security, the directory board), each mini-app is a shop. Shops never
 knock through each other's walls; they send customers by address.
@@ -79,7 +79,7 @@ compiled in as usual: iOS can't download code, and Play Store deferred
 components aren't set up. Chat is global (messages and calls reach you in any
 mini-app), so it loads at start everywhere.
 
-## Adding a mini-app (taxi)
+## Adding a mini-app (as taxi was)
 
 1. `packages/feature_taxi` with `taxi_info.dart` (a `MiniAppInfo`) and
    `feature_taxi.dart` (`TaxiMiniApp extends MiniApp`), depending on
@@ -88,6 +88,11 @@ mini-app), so it loads at start everywhere.
    line in `lib/mini_apps.dart`.
 3. Server: a `taxi` module, and `{ id: "taxi", needs: ["taxi"] }` in
    `src/modules/appconfig/clientConfig.ts`.
+
+Taxi itself (rides, live tracking, driver mode) is described in the
+server's `docs/TAXI.md`. It listens on the shared socket with
+`AppSocket.watch(...)`, the general form of `watchPost` (counted, and sent
+again after a reconnect).
 
 ## Region and units
 
