@@ -10,6 +10,7 @@ import 'package:feature_taxi/feature_taxi.dart';
 import 'package:feature_taxi/src/car_marker.dart';
 import 'package:feature_taxi/src/models.dart';
 import 'package:feature_taxi/src/navigation_link.dart';
+import 'package:feature_taxi/src/offer_alert.dart';
 import 'package:feature_taxi/src/taxi_api.dart';
 import 'package:feature_taxi/src/taxi_controllers.dart';
 import 'package:feature_taxi/src/taxi_home_screen.dart';
@@ -40,6 +41,9 @@ class FakeTaxiServer {
   Map<String, dynamic>? trip;
   Map<String, dynamic>? vehicle;
   Map<String, dynamic>? offer;
+
+  /// GET /taxi/trips, when a test sets several rides.
+  List<Map<String, dynamic>>? history;
 
   /// Razorpay is set up here (the estimate offers paying online).
   bool online = false;
@@ -134,7 +138,7 @@ class FakeTaxiServer {
         final going = trip != null && !['completed', 'cancelled'].contains(trip!['status']);
         return json(going ? trip : null);
       case ('GET', '/taxi/trips'):
-        return json([?trip]);
+        return json(history ?? [?trip]);
       case ('GET', '/taxi/trips/7'):
         return json(trip);
       case ('POST', '/taxi/trips/7/cancel'):
@@ -197,6 +201,7 @@ void main() {
   late FakeSocket socket;
   late List<Uri> launched;
   late FakeCheckout checkout;
+  late FakeOfferAlert alert;
 
   setUp(() {
     SharedPreferences.setMockInitialValues({'id': 1, 'username': 'me', 'followerCount': 0});
@@ -204,6 +209,7 @@ void main() {
     socket = FakeSocket();
     launched = [];
     checkout = FakeCheckout();
+    alert = FakeOfferAlert();
   });
 
   Future<ProviderContainer> show(
@@ -226,6 +232,7 @@ void main() {
         driverPingIntervalProvider.overrideWithValue(const Duration(seconds: 4)),
         // A phone with Google Maps: the first link opens.
         checkoutProvider.overrideWithValue(checkout),
+        offerAlertProvider.overrideWithValue(alert),
         linkLauncherProvider.overrideWithValue((link) async {
           launched.add(link);
           return true;
@@ -539,11 +546,42 @@ void main() {
       expect(find.text('Ride cancelled'), findsOneWidget);
     });
 
-    taxiTest('history lists rides', (tester) async {
+    taxiTest('history, Ola-style: a card per ride; rides you took and drove on separate tabs', (tester) async {
+      final took = server.newTrip(status: 'completed')
+        ..['driver'] = {'id': 11, 'name': 'Ravi Kumar', 'vehicle': 'White Swift Dzire', 'plate': 'DL 1C AB 1234'}
+        ..['payment'] = 'online'
+        ..['paidAt'] = 1;
+      final cancelled = Map<String, dynamic>.of(server.newTrip(status: 'cancelled'))
+        ..['id'] = 8
+        ..['cancelledBy'] = 'system';
+      final drove = Map<String, dynamic>.of(server.newTrip(status: 'completed', asDriver: true))..['id'] = 9;
+      server.history = [took, cancelled, drove];
+      await show(tester, const HistoryScreen());
+
+      // Rides you took: pickup, drop-off, the car and driver, the fare and how it was paid.
+      expect(find.text('Rides (2)'), findsOneWidget);
+      expect(find.text('Drives (1)'), findsOneWidget);
+      expect(find.text('Connaught Place'), findsNWidgets(2));
+      expect(find.text('IGI Airport T3'), findsNWidgets(2));
+      expect(find.text('Completed'), findsOneWidget);
+      expect(find.text('White Swift Dzire · Ravi Kumar'), findsOneWidget);
+      expect(find.text('₹396'), findsOneWidget);
+      expect(find.text(' · Paid online'), findsOneWidget);
+      expect(find.text('No drivers'), findsOneWidget);
+
+      // Rides you drove: who you drove.
+      await tester.tap(find.text('Drives (1)'));
+      await settle(tester);
+      expect(find.text('Rider: Asha'), findsOneWidget);
+      expect(find.text(' · Cash'), findsOneWidget);
+      expect(find.text('No drivers'), findsNothing);
+    });
+
+    taxiTest('history with only one kind of ride: no tabs', (tester) async {
       server.newTrip(status: 'completed');
       await show(tester, const HistoryScreen());
-      expect(find.text('Connaught Place → IGI Airport T3'), findsOneWidget);
-      expect(find.text('₹396'), findsOneWidget);
+      expect(find.byType(SegmentedButton<bool>), findsNothing);
+      expect(find.text('Completed'), findsOneWidget);
     });
   });
 
@@ -604,9 +642,14 @@ void main() {
       expect(find.text('Pickup 450 m from you'), findsOneWidget);
       expect(find.textContaining(RegExp(r'^1[45]s$')), findsOneWidget);
       expect(find.text('The exact pickup shows once you accept.'), findsOneWidget);
+      // Ringing (chime and buzz) while the offer waits...
+      expect(alert.ringing, isTrue);
 
       await tester.tap(find.text('Accept'));
       await settle(tester);
+      // ...and quiet once it's taken.
+      expect(alert.ringing, isFalse);
+      expect(alert.starts, 1);
       expect(server.asked, contains('POST /taxi/trips/7/accept'));
       expect(find.text('Drive to the pickup'), findsOneWidget);
       expect(find.text('Picking up Asha at Connaught Place.'), findsOneWidget);
@@ -643,6 +686,7 @@ void main() {
       await settle(tester);
       expect(find.text('New ride · ₹396'), findsNothing);
       expect(find.text('Waiting for a ride request…'), findsOneWidget);
+      expect(alert.ringing, isFalse); // stops when time's up
     });
 
     taxiTest('declining tells the server', (tester) async {
@@ -657,6 +701,7 @@ void main() {
       await settle(tester);
       expect(server.asked, contains('POST /taxi/trips/7/decline'));
       expect(find.text('New ride · ₹396'), findsNothing);
+      expect(alert.ringing, isFalse);
     });
   });
 }
@@ -685,6 +730,21 @@ class NoPlaceNames implements PlaceSearch {
 
   @override
   Future<Place?> reverse(GeoPoint point) async => null;
+}
+
+/// The driver's ride-request chime, recorded instead of played.
+class FakeOfferAlert implements OfferAlert {
+  bool ringing = false;
+  int starts = 0;
+
+  @override
+  Future<void> start() async {
+    if (!ringing) starts++;
+    ringing = true;
+  }
+
+  @override
+  Future<void> stop() async => ringing = false;
 }
 
 /// Razorpay's sheet, answering what the test says.

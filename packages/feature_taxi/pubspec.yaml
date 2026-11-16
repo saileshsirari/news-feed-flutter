@@ -24,6 +24,8 @@ dependencies:
     path: ../payments_kit
   # The driver's Navigate button opens the phone's maps app.
   url_launcher: ^6.3.3
+  # The driver's "new ride" chime.
+  audioplayers: ^6.8.1
 
 dev_dependencies:
   flutter_test:
@@ -31,3 +33,8 @@ dev_dependencies:
   flutter_lints: ^6.0.0
   flutter_secure_storage: ^11.2.0
   shared_preferences: ^2.3.3
+
+flutter:
+  assets:
+    # An original two-tone chime (made for this app; no licence needed).
+    - assets/sounds/ride_request.wav

@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geo_kit/geo_kit.dart';
 
 import 'models.dart';
+import 'offer_alert.dart';
 import 'taxi_controllers.dart';
 import 'taxi_home_screen.dart';
 
@@ -65,6 +66,7 @@ class DriverPanel extends ConsumerWidget {
           _OfferCard(
             key: ValueKey(offer.tripId),
             offer: offer,
+            alert: ref.read(offerAlertProvider),
             onAccept: () async {
               final tripId = await controller.accept();
               if (tripId != null && context.mounted) await openTrip(context, ref, tripId);
@@ -134,12 +136,16 @@ class _OfferCard extends StatefulWidget {
   const _OfferCard({
     super.key,
     required this.offer,
+    required this.alert,
     required this.onAccept,
     required this.onDecline,
     required this.onExpired,
   });
 
   final Offer offer;
+
+  /// Rings while this card is showing (see offer_alert.dart).
+  final OfferAlert alert;
   final VoidCallback onAccept;
   final VoidCallback onDecline;
   final VoidCallback onExpired;
@@ -164,6 +170,8 @@ class _OfferCardState extends State<_OfferCard> {
     // A wrong phone clock: assume the usual 15 s.
     _window = left.isNegative || left > const Duration(seconds: 30) ? const Duration(seconds: 15) : left;
     _until = now.add(_window);
+    // Ring until the card goes (accepted, declined, or time's up).
+    unawaited(widget.alert.start());
     _tick = Timer.periodic(const Duration(milliseconds: 250), (_) {
       if (!mounted) return;
       if (DateTime.now().isAfter(_until)) {
@@ -177,6 +185,7 @@ class _OfferCardState extends State<_OfferCard> {
   @override
   void dispose() {
     _tick?.cancel();
+    unawaited(widget.alert.stop());
     super.dispose();
   }
 
