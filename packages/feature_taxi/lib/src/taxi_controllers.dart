@@ -8,6 +8,7 @@ import 'package:geo_kit/geo_kit.dart';
 import 'package:payments_kit/payments_kit.dart';
 
 import 'models.dart';
+import 'offer_alert.dart';
 import 'taxi_api.dart';
 
 /// One ride, kept live. Like a parcel-tracking page that updates itself:
@@ -165,7 +166,10 @@ class DriverState {
 /// listens for offers. Going off duty, or leaving the mini-app, stops both
 /// and tells the server, which forgets the position.
 class DriverController extends Notifier<DriverState> {
-  Timer? _pings;
+  /// Positions while on duty (a foreground service on Android, so they keep
+  /// coming with the screen off or Google Maps in front).
+  StreamSubscription<GeoPoint>? _tracking;
+  DateTime? _lastPing;
 
   /// Set while on duty: the API to say "off duty" with (even while this
   /// notifier is being disposed, when ref can't be used any more).
@@ -173,8 +177,14 @@ class DriverController extends Notifier<DriverState> {
   void Function()? _stopOffers;
   StreamSubscription<Map<String, dynamic>>? _events;
 
+  /// Rings while an offer waits; and its 15 s, timed here rather than on
+  /// screen, so both work when the app isn't in front.
+  OfferAlert? _alert;
+  Timer? _offerLapses;
+
   @override
   DriverState build() {
+    _alert = ref.read(offerAlertProvider);
     ref.onDispose(_stop);
     unawaited(_loadVehicle());
     return const DriverState();
@@ -200,12 +210,13 @@ class DriverController extends Notifier<DriverState> {
     }
   }
 
-  /// On duty: first position, then a ping every few seconds, and offers.
+  /// On duty: first position (asking permission), then GPS as the phone
+  /// moves, sent every few seconds, and offers.
   Future<void> goOnline() async {
     if (state.online || state.goingOnline) return;
     state = state.copyWith(goingOnline: true, error: () => null);
     try {
-      await _ping();
+      await _ping(await ref.read(driverLocationProvider).current());
     } on LocationUnavailable catch (e) {
       if (ref.mounted) state = state.copyWith(goingOnline: false, error: () => e.message);
       return;
@@ -220,9 +231,26 @@ class DriverController extends Notifier<DriverState> {
     final socket = ref.read(socketProvider(me));
     _stopOffers = socket.watch({'type': 'watch_offers'}, {'type': 'unwatch_offers'});
     _events = socket.events.listen(_onEvent);
-    _pings = Timer.periodic(ref.read(driverPingIntervalProvider), (_) {
-      _ping().catchError((Object e) => debugPrint('[taxi] ping failed: $e')).ignore();
-    });
+    final every = ref.read(driverPingIntervalProvider);
+    _tracking = ref
+        .read(driverTrackerProvider)
+        .track(
+          every: every,
+          notificationTitle: 'On duty: taking rides',
+          notificationText: 'Sharing your location for ride requests. Go off duty in Taxi to stop.',
+        )
+        .listen(
+          (here) {
+            // GPS can report more often than needed: a ping every [every] is plenty.
+            final last = _lastPing;
+            if (last != null && DateTime.now().difference(last) < every * 0.8) return;
+            _ping(here).catchError((Object e) => debugPrint('[taxi] ping failed: $e')).ignore();
+          },
+          onError: (Object e) {
+            if (!ref.mounted) return;
+            state = state.copyWith(error: () => e is LocationUnavailable ? e.message : 'Location stopped: $e');
+          },
+        );
     // An offer made while the socket was connecting.
     await _checkOffer();
   }
@@ -230,19 +258,21 @@ class DriverController extends Notifier<DriverState> {
   Future<void> goOffline() async => _stop();
 
   void _stop() {
-    _pings?.cancel();
-    _pings = null;
+    _tracking?.cancel(); // stops the foreground service and its notification
+    _tracking = null;
     _stopOffers?.call();
     _stopOffers = null;
     _events?.cancel();
     _events = null;
+    _offerLapses?.cancel();
+    unawaited(_alert?.stop());
     _onDutyApi?.offline().catchError((Object _) {}).ignore();
     _onDutyApi = null;
     if (ref.mounted) state = state.copyWith(online: false, areaName: () => null, offer: () => null);
   }
 
-  Future<void> _ping() async {
-    final here = await ref.read(driverLocationProvider).current();
+  Future<void> _ping(GeoPoint here) async {
+    _lastPing = DateTime.now();
     final answer = await _api.ping(here);
     if (!ref.mounted) return;
     state = state.copyWith(
@@ -251,12 +281,31 @@ class DriverController extends Notifier<DriverState> {
     );
   }
 
+  /// The offer waiting (or none): rings and shows it, or stops ringing.
+  void _setOffer(Offer? offer) {
+    if (!ref.mounted) return;
+    final before = state.offer;
+    state = state.copyWith(offer: () => offer);
+    if (offer?.tripId == before?.tripId) return;
+    _offerLapses?.cancel();
+    if (offer == null) {
+      unawaited(_alert?.stop());
+      return;
+    }
+    unawaited(_alert?.start(offer));
+    // Its 15 s by this phone's clock (which may be off from the server's
+    // by minutes: only the length is trusted, as on the card).
+    final left = offer.expiresAt.difference(DateTime.now());
+    final window = left.isNegative || left > const Duration(seconds: 30) ? const Duration(seconds: 15) : left;
+    _offerLapses = Timer(window, () => offerExpired(offer.tripId));
+  }
+
   void _onEvent(Map<String, dynamic> event) {
     switch (event['type']) {
       case 'taxi_offer':
-        state = state.copyWith(offer: () => Offer.fromJson(event['offer'] as Map<String, dynamic>));
+        _setOffer(Offer.fromJson(event['offer'] as Map<String, dynamic>));
       case 'taxi_offer_gone' when state.offer?.tripId == event['tripId']:
-        state = state.copyWith(offer: () => null);
+        _setOffer(null);
       case 'reconnected':
         unawaited(_checkOffer());
     }
@@ -265,7 +314,7 @@ class DriverController extends Notifier<DriverState> {
   Future<void> _checkOffer() async {
     try {
       final offer = await _api.offer();
-      if (ref.mounted) state = state.copyWith(offer: () => offer);
+      _setOffer(offer);
     } on Object catch (e) {
       debugPrint('[taxi] couldn\'t check for offers: $e');
     }
@@ -275,7 +324,7 @@ class DriverController extends Notifier<DriverState> {
   Future<int?> accept() async {
     final offer = state.offer;
     if (offer == null) return null;
-    state = state.copyWith(offer: () => null);
+    _setOffer(null);
     try {
       return (await _api.accept(offer.tripId)).id;
     } on Object catch (e) {
@@ -287,14 +336,17 @@ class DriverController extends Notifier<DriverState> {
   Future<void> decline() async {
     final offer = state.offer;
     if (offer == null) return;
-    state = state.copyWith(offer: () => null);
+    _setOffer(null);
     await _api.decline(offer.tripId).catchError((Object _) {});
   }
 
-  /// The offer's time ran out on the phone (the server moves on by itself).
+  /// The offer's time ran out (the server moves on by itself).
   void offerExpired(int tripId) {
-    if (state.offer?.tripId == tripId) state = state.copyWith(offer: () => null);
+    if (state.offer?.tripId == tripId) _setOffer(null);
   }
 }
+
+/// The driver's moving position while on duty (tests swap it).
+final driverTrackerProvider = Provider<LocationTracker>((_) => const DeviceLocationTracker());
 
 final driverProvider = NotifierProvider.autoDispose<DriverController, DriverState>(DriverController.new);

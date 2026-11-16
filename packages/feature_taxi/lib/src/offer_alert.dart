@@ -1,27 +1,44 @@
 import 'dart:async';
 
+import 'package:app_core/app_core.dart' show NotificationChannel, cancelLocalNotification, showLocalNotification;
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:geo_kit/geo_kit.dart' show formatDistance;
+
+import 'models.dart';
 
 /// Gets the driver's attention while a ride offer waits, as Ola's and
 /// Uber's driver apps do: a chime on repeat and the phone buzzing, until
 /// they accept, decline, or the 15 seconds run out. Like a shop doorbell
 /// that keeps ringing until someone comes to the counter.
 ///
-/// Only while the app is open (phase 1). With the app in the background,
-/// a driver would need a push notification with a sound: phase 2.
+/// It works with the app in the background too: on duty, Android keeps the
+/// app running (the location foreground service), so the chime plays, and a
+/// notification ("New ride · ₹396") brings the app back with one tap. With
+/// the app closed altogether, there's no offer to ring for: the driver is
+/// off duty.
 abstract interface class OfferAlert {
-  /// Starts ringing (does nothing if it already is).
-  Future<void> start();
+  /// Starts ringing for [offer] (does nothing if it already is).
+  Future<void> start(Offer offer);
 
   /// Stops it.
   Future<void> stop();
 }
 
-/// The real one: the chime from this package's assets, looped, and a short
-/// vibration every second (Flutter's haptics need no extra permission).
+/// The real one: the chime from this package's assets, looped, a short
+/// vibration every second (Flutter's haptics need no extra permission), and
+/// a notification when the app isn't on screen.
 class ChimeOfferAlert implements OfferAlert {
+  /// One notification for ride requests: a new one replaces the last.
+  static const _notificationId = 7001;
+  static const _channel = NotificationChannel(
+    id: 'taxi_ride_requests',
+    name: 'Ride requests',
+    description: 'A new ride request while you\'re on duty as a driver',
+  );
+
   AudioPlayer? _player;
   Timer? _buzz;
 
@@ -29,8 +46,21 @@ class ChimeOfferAlert implements OfferAlert {
   static const _sound = 'packages/feature_taxi/assets/sounds/ride_request.wav';
 
   @override
-  Future<void> start() async {
+  Future<void> start(Offer offer) async {
     if (_player != null) return;
+    if (WidgetsBinding.instance.lifecycleState != AppLifecycleState.resumed) {
+      final away = offer.pickupDistanceM == null
+          ? ''
+          : ' · pickup ${formatDistance(offer.pickupDistanceM! / 1000)} away';
+      unawaited(
+        showLocalNotification(
+          id: _notificationId,
+          title: 'New ride · ${offer.fare}',
+          body: 'Open Taxi to accept within 15 seconds$away.',
+          channel: _channel,
+        ).catchError((Object _) {}),
+      );
+    }
     final player = _player = AudioPlayer();
     _buzz = Timer.periodic(const Duration(seconds: 1), (_) => HapticFeedback.heavyImpact());
     unawaited(HapticFeedback.heavyImpact());
@@ -57,6 +87,7 @@ class ChimeOfferAlert implements OfferAlert {
 
   @override
   Future<void> stop() async {
+    unawaited(cancelLocalNotification(_notificationId));
     _buzz?.cancel();
     _buzz = null;
     final player = _player;

@@ -106,3 +106,14 @@ Future<void> showLocalNotification({
   );
   _shown.add(ShownNotification(title: title, body: body, at: DateTime.now(), link: link));
 }
+
+/// Takes notification [id] away (a ride offer that's gone, say).
+Future<void> cancelLocalNotification(int id) async {
+  if (kIsWeb) return;
+  try {
+    await _ensureReady();
+    await _plugin.cancel(id: id);
+  } on Object {
+    // No plugin here (tests, desktop): nothing to take away.
+  }
+}

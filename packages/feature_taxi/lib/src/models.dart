@@ -166,6 +166,7 @@ class Trip {
     this.payment = PaymentMethod.cash,
     this.paidAt,
     this.canPayOnline = false,
+    this.searchingAgain = false,
   });
 
   final int id;
@@ -205,6 +206,9 @@ class Trip {
 
   /// The rider can pay online now (an online ride, over, not paid yet).
   final bool canPayOnline;
+
+  /// Looking for a driver again: the first one cancelled.
+  final bool searchingAgain;
 
   /// Paid online; nothing for the driver to collect.
   bool get isPaidOnline => paidAt != null;
@@ -249,6 +253,7 @@ class Trip {
       payment: json['payment'] == 'online' ? PaymentMethod.online : PaymentMethod.cash,
       paidAt: time(json['paidAt']),
       canPayOnline: json['canPayOnline'] == true,
+      searchingAgain: json['searchingAgain'] == true,
     );
   }
 
@@ -280,6 +285,7 @@ class Trip {
     payment: payment,
     paidAt: paidAt,
     canPayOnline: canPayOnline,
+    searchingAgain: searchingAgain,
   );
 
   /// "Connaught Place", or the spot's coordinates when it had no name.

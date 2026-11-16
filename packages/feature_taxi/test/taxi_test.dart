@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:app_core/app_core.dart';
@@ -202,6 +203,7 @@ void main() {
   late List<Uri> launched;
   late FakeCheckout checkout;
   late FakeOfferAlert alert;
+  late FakeTracker tracker;
 
   setUp(() {
     SharedPreferences.setMockInitialValues({'id': 1, 'username': 'me', 'followerCount': 0});
@@ -210,6 +212,7 @@ void main() {
     launched = [];
     checkout = FakeCheckout();
     alert = FakeOfferAlert();
+    tracker = FakeTracker();
   });
 
   Future<ProviderContainer> show(
@@ -229,7 +232,9 @@ void main() {
         socketProvider.overrideWith((ref, userId) => socket),
         mapTilesProvider.overrideWithValue(MapTiles.none),
         driverLocationProvider.overrideWithValue(const FixedLocation(GeoPoint(28.632, 77.219))),
-        driverPingIntervalProvider.overrideWithValue(const Duration(seconds: 4)),
+        // Every position the fake GPS gives is sent (no 4 s spacing in tests).
+        driverPingIntervalProvider.overrideWithValue(Duration.zero),
+        driverTrackerProvider.overrideWithValue(tracker),
         // A phone with Google Maps: the first link opens.
         checkoutProvider.overrideWithValue(checkout),
         offerAlertProvider.overrideWithValue(alert),
@@ -526,6 +531,13 @@ void main() {
       expect(find.text('Paid ₹396 online. Nothing to collect.'), findsOneWidget);
     });
 
+    taxiTest('the driver cancelled: the rider is told another is being found', (tester) async {
+      server.newTrip(status: 'offered')['searchingAgain'] = true;
+      await show(tester, const TripScreen(tripId: 7));
+      expect(find.text('Finding you another driver…'), findsOneWidget);
+      expect(find.textContaining('Your driver cancelled.'), findsOneWidget);
+    });
+
     taxiTest('no drivers nearby', (tester) async {
       server.newTrip(status: 'cancelled')
         ..['cancelledBy'] = 'system'
@@ -606,15 +618,19 @@ void main() {
       expect(server.pings.single, {'lat': 28.632, 'lng': 77.219});
       expect(socket.watches, anyElement(equals({'type': 'watch_offers'})));
 
-      // Every few seconds, another ping.
-      await tester.pump(const Duration(seconds: 4));
+      // GPS keeps going (on Android as a foreground service, with its notification), each position sent.
+      expect(tracker.notification, 'On duty: taking rides');
+      expect(tracker.controller.hasListener, isTrue);
+      tracker.controller.add(const GeoPoint(28.633, 77.22));
       await settle(tester);
       expect(server.pings, hasLength(2));
+      expect(server.pings.last, {'lat': 28.633, 'lng': 77.22});
 
       await tester.tap(find.text('On duty'));
       await settle(tester);
       expect(server.asked, contains('POST /taxi/driver/offline'));
       expect(socket.watches, isEmpty);
+      expect(tracker.controller.hasListener, isFalse); // GPS (and its notification) stopped
     });
 
     Map<String, Object?> offerJson({int seconds = 15}) => {
@@ -642,8 +658,9 @@ void main() {
       expect(find.text('Pickup 450 m from you'), findsOneWidget);
       expect(find.textContaining(RegExp(r'^1[45]s$')), findsOneWidget);
       expect(find.text('The exact pickup shows once you accept.'), findsOneWidget);
-      // Ringing (chime and buzz) while the offer waits...
+      // Ringing (chime, buzz, and a notification if the app isn't in front) while the offer waits...
       expect(alert.ringing, isTrue);
+      expect(alert.ringingFor?.fare.toString(), '₹396');
 
       await tester.tap(find.text('Accept'));
       await settle(tester);
@@ -681,8 +698,8 @@ void main() {
       socket.controller.add({'type': 'taxi_offer', 'offer': offerJson(seconds: 1)});
       await settle(tester);
       expect(find.text('New ride · ₹396'), findsOneWidget);
-      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 1200)));
-      await tester.pump(const Duration(milliseconds: 300));
+      // The 15 s (here 1 s) are timed by the driver's controller, so they run out even off screen.
+      await tester.pump(const Duration(milliseconds: 1500));
       await settle(tester);
       expect(find.text('New ride · ₹396'), findsNothing);
       expect(find.text('Waiting for a ride request…'), findsOneWidget);
@@ -732,15 +749,33 @@ class NoPlaceNames implements PlaceSearch {
   Future<Place?> reverse(GeoPoint point) async => null;
 }
 
+/// The driver's GPS as it moves: the test adds positions.
+class FakeTracker implements LocationTracker {
+  final controller = StreamController<GeoPoint>.broadcast();
+  String? notification;
+
+  @override
+  Stream<GeoPoint> track({
+    required Duration every,
+    required String notificationTitle,
+    required String notificationText,
+  }) {
+    notification = notificationTitle;
+    return controller.stream;
+  }
+}
+
 /// The driver's ride-request chime, recorded instead of played.
 class FakeOfferAlert implements OfferAlert {
   bool ringing = false;
   int starts = 0;
+  Offer? ringingFor;
 
   @override
-  Future<void> start() async {
+  Future<void> start(Offer offer) async {
     if (!ringing) starts++;
     ringing = true;
+    ringingFor = offer;
   }
 
   @override

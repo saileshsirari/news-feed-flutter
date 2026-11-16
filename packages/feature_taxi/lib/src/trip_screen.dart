@@ -285,6 +285,10 @@ class _TripPanelState extends ConsumerState<_TripPanel> {
       };
     }
     return switch (trip.status) {
+      TripStatus.requested || TripStatus.offered when trip.searchingAgain => (
+        'Finding you another driver…',
+        'Your driver cancelled. You don\'t need to do anything: we\'re asking others nearby.',
+      ),
       TripStatus.requested ||
       TripStatus.offered => ('Finding you a driver…', 'Asking the nearest drivers, one at a time.'),
       TripStatus.accepted => ('${trip.driver?.name ?? 'Your driver'} is on the way', eta),

@@ -8,7 +8,7 @@ export 'config/apps_config.dart';
 export 'mini_app/app_links.dart';
 export 'mini_app/mini_app.dart';
 export 'mini_app/registry.dart';
-export 'push/local_notifications.dart' show NotificationChannel, showLocalNotification;
+export 'push/local_notifications.dart' show NotificationChannel, cancelLocalNotification, showLocalNotification;
 export 'push/push_setup.dart' show handlePushInBackground, savedSignIn;
 export 'shell/home_shell.dart' show HomeShell, MiniAppTile, openMiniApp;
 export 'shell/super_app.dart';

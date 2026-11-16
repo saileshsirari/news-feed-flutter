@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:geolocator/geolocator.dart';
 
 import 'geo_point.dart';
@@ -84,5 +85,53 @@ class DeviceLocation implements AccurateLocationSource {
     } on Exception {
       throw const LocationUnavailable('Couldn\'t find where you are. Try again, or pick a place on the map.');
     }
+  }
+}
+
+/// The device's position as it moves, for as long as it's listened to: a
+/// taxi driver on duty. Unlike [LocationSource], which answers once.
+abstract interface class LocationTracker {
+  /// Positions every [every] or so. On Android this runs as a *foreground
+  /// service* with an ongoing notification ([notificationTitle],
+  /// [notificationText]): Android's rule for apps that keep using location
+  /// when they're not on screen, so the person can always see it's on and
+  /// stop it. Cancelling the subscription stops it and the notification.
+  Stream<GeoPoint> track({required Duration every, required String notificationTitle, required String notificationText});
+}
+
+/// GPS through geolocator. Permission is asked first by [DeviceLocation]
+/// (the "while using the app" kind is enough: a foreground service started
+/// while the app is open may keep using it).
+class DeviceLocationTracker implements LocationTracker {
+  const DeviceLocationTracker({this.decimals = 5});
+
+  final int decimals;
+
+  @override
+  Stream<GeoPoint> track({required Duration every, required String notificationTitle, required String notificationText}) {
+    final LocationSettings settings = switch (defaultTargetPlatform) {
+      _ when kIsWeb => const LocationSettings(accuracy: LocationAccuracy.high),
+      TargetPlatform.android => AndroidSettings(
+        accuracy: LocationAccuracy.high,
+        intervalDuration: every,
+        foregroundNotificationConfig: ForegroundNotificationConfig(
+          notificationTitle: notificationTitle,
+          notificationText: notificationText,
+          notificationChannelName: 'On duty (location)',
+          // Keeps the CPU (not the screen) awake so positions keep coming.
+          enableWakeLock: true,
+          setOngoing: true,
+        ),
+      ),
+      TargetPlatform.iOS => AppleSettings(
+        accuracy: LocationAccuracy.high,
+        // Phase 1 on iPhone: while the app is open (background needs Xcode capabilities).
+        allowBackgroundLocationUpdates: false,
+      ),
+      _ => const LocationSettings(accuracy: LocationAccuracy.high),
+    };
+    return Geolocator.getPositionStream(
+      locationSettings: settings,
+    ).map((p) => GeoPoint(p.latitude, p.longitude).rounded(decimals));
   }
 }
