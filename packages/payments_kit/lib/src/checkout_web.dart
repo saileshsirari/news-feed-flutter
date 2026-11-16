@@ -30,6 +30,11 @@ class _CheckoutJs implements Checkout {
 
   @override
   Future<CheckoutResult> open(Map<String, dynamic> options) async {
+    // Stripe's sheet is phones-only for now (the browser needs Stripe.js's
+    // own payment form, a later step).
+    if (isStripeCheckout(options)) {
+      return const CheckoutFailed('paying by card in the browser isn\'t available yet; use the app on your phone, or cash');
+    }
     try {
       await _load();
     } on StateError {

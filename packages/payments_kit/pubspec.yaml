@@ -17,6 +17,8 @@ dependencies:
   http: ^1.2.2
   intl: ^0.20.3
   razorpay_flutter: ^1.4.7
+  # Stripe's PaymentSheet (euros, dollars), on phones.
+  flutter_stripe: ^15.0.0
   web: ^1.1.1
 
 dev_dependencies:

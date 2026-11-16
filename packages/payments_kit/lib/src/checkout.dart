@@ -27,11 +27,24 @@ class CheckoutFailed extends CheckoutResult {
   final String message;
 }
 
-/// The provider's payment sheet. On phones, Razorpay's own SDK; in a
-/// browser, its Checkout.js. Takes the options the server sent with the
-/// order (key id, order id, amount) and nothing secret.
+/// The provider's payment sheet, for whichever company the server chose
+/// for the order's money:
+///
+/// * Razorpay (rupees): its SDK on phones, Checkout.js in a browser. Its
+///   "paid" answer is signed, and the server checks the signature.
+/// * Stripe (euros, dollars): its PaymentSheet on phones. Its "paid" comes
+///   with no signature; the server asks Stripe itself before believing it.
+///   (Not in the browser yet: there it says so, and cash still works.)
+///
+/// Takes the options the server sent with the order (public key, order,
+/// amount; for Stripe, the order's client secret) and nothing secret.
 abstract interface class Checkout {
   Future<CheckoutResult> open(Map<String, dynamic> options);
 }
+
+/// Options for Stripe's sheet (the server's Stripe checkout has these),
+/// rather than Razorpay's.
+bool isStripeCheckout(Map<String, dynamic> options) =>
+    options['clientSecret'] is String && options['publishableKey'] is String;
 
 final checkoutProvider = Provider<Checkout>((ref) => impl.platformCheckout());
