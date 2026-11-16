@@ -412,6 +412,8 @@ class ApiService {
     required String body,
     String? clientMessageId,
     List<int> mediaIds = const [],
+    /// A shared location: {lat, lng, name?, address?, liveMinutes?}.
+    Map<String, Object?>? location,
   }) async {
     final res = await _http.post(
       _uri('/conversations/$conversationId/messages'),
@@ -421,6 +423,7 @@ class ApiService {
         'body': body,
         'clientMessageId': ?clientMessageId,
         if (mediaIds.isNotEmpty) 'mediaIds': mediaIds,
+        'location': ?location,
       }),
     );
     return ChatMessage.fromJson(_decodeObject(res));

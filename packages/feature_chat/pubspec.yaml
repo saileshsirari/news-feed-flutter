@@ -24,6 +24,13 @@ dependencies:
   permission_handler: ^13.0.2
   shared_media:
     path: ../shared_media
+  # Sharing a location (WhatsApp-style): the map, place picker, GPS, and
+  # directions in the phone's maps app...
+  geo_kit:
+    path: ../geo_kit
+  url_launcher: ^6.3.3
+  # ...and live positions in encrypted chats, sealed with AES-256-GCM.
+  cryptography: ^2.9.0
 
 dev_dependencies:
   flutter_test:

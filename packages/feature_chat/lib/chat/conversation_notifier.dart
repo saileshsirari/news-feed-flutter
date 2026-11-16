@@ -423,6 +423,30 @@ class ConversationNotifier extends Notifier<ConversationState> {
     }
   }
 
+  /// Shares a location in this chat ({lat, lng, name?, address?}; a live
+  /// share adds liveMinutes in a normal chat, or live: {until, key} in an
+  /// encrypted one, see LiveShareController). The sent message, or null if
+  /// it couldn't be sent (the chat then shows why).
+  Future<ChatMessage?> sendLocation(Map<String, Object?> location) async {
+    final clientMessageId = newClientMessageId(_currentUserId);
+    try {
+      if (state.isE2e) return await _e2e.sendLocation(conversationId, location, clientMessageId: clientMessageId);
+      final message = await sendWithOneRetry(
+        ref.read(apiServiceProvider),
+        conversationId,
+        senderId: _currentUserId,
+        body: '',
+        clientMessageId: clientMessageId,
+        location: location,
+      );
+      if (ref.mounted) await _addSent(message);
+      return message;
+    } catch (e) {
+      if (ref.mounted) state = state.copyWith(error: 'Couldn\'t share the location: $e');
+      return null;
+    }
+  }
+
   /// Your own sent message, from here or the outbox: stored at once so it
   /// shows, then anything sent by others just before it is fetched too.
   Future<void> _addSent(ChatMessage message) async {

@@ -189,7 +189,7 @@ class E2eChats {
       final received = await device.receive(group, ciphertext);
       if (!received.isMessage) return null; // a group change, applied
       final payload = jsonDecode(utf8.decode(received.plaintext!)) as Map<String, dynamic>;
-      return _decryptedMessage(json, payload['body'] as String? ?? '', media: payload['media'] as List?);
+      return _decryptedMessage(json, payload['body'] as String? ?? '', media: payload['media'] as List?, extra: extrasOf(payload));
     } on Object catch (e) {
       debugPrint('[e2e] message ${json['id']} couldn\'t be decrypted: $e');
       return _decryptedMessage(json, '🔒 This message couldn\'t be decrypted on this device', failed: true);
@@ -198,13 +198,20 @@ class E2eChats {
 
   /// [media]: what the encrypted message says its files are, with their
   /// keys (see SealedAttachment), kept as sealed_media.
-  RemoteMessage _decryptedMessage(Map<String, dynamic> json, String body, {bool failed = false, List<dynamic>? media}) {
+  RemoteMessage _decryptedMessage(
+    Map<String, dynamic> json,
+    String body, {
+    bool failed = false,
+    List<dynamic>? media,
+    Map<String, Object?> extra = const {},
+  }) {
     final message = {
       ...json,
       'ciphertext': null,
       'body': body,
       'decrypted': !failed,
       if (media != null && media.isNotEmpty) 'sealed_media': media,
+      ...extra,
     };
     return RemoteMessage(
       conversationId: json['conversation_id'] as int,
@@ -225,14 +232,47 @@ class E2eChats {
     String text, {
     required String clientMessageId,
     List<SealedAttachment> media = const [],
+  }) {
+    final files = previewsWithinBudget(media).map((m) => m.toJson()).toList();
+    final payload = {'type': 'text', 'body': text, if (files.isNotEmpty) 'media': files};
+    return _send(conversationId, payload, clientMessageId: clientMessageId, mediaIds: [for (final m in media) m.mediaId]);
+  }
+
+  /// Shares a location: {lat, lng, name?, address?} and, for a live share,
+  /// live: {until, key} (the key that seals its moving positions, see
+  /// LiveUpdateSealer: only the chat's members ever see it, inside this).
+  Future<ChatMessage> sendLocation(int conversationId, Map<String, Object?> location, {required String clientMessageId}) =>
+      _send(conversationId, {'type': 'location', 'location': location}, clientMessageId: clientMessageId);
+
+  /// Says a live share ([shareMessageId]) has ended early: kept in the chat,
+  /// so everyone learns it, even devices that were offline.
+  Future<ChatMessage> sendLocationStop(int conversationId, int shareMessageId, {required String clientMessageId}) =>
+      _send(conversationId, {'type': 'location_stop', 'shareId': shareMessageId}, clientMessageId: clientMessageId);
+
+  /// This install's device, for live updates sent through the relay.
+  Future<int> currentDeviceId() => _requireDevice();
+
+  /// What a decrypted [payload] adds to the stored message, besides its
+  /// text: a shared location, or the end of a live one.
+  static Map<String, Object?> extrasOf(Map<String, dynamic> payload) => switch (payload['type']) {
+    'location' => {'location': payload['location']},
+    'location_stop' => {'location_stop': payload['shareId']},
+    _ => const {},
+  };
+
+  Future<ChatMessage> _send(
+    int conversationId,
+    Map<String, Object?> payload, {
+    required String clientMessageId,
+    List<int> mediaIds = const [],
   }) => _serially(() async {
     final deviceId = await _requireDevice();
     final groupId = await _groupId(conversationId);
     if (groupId == null) throw const E2eUnavailable('This device isn\'t in this encrypted chat.');
     final device = await e2eDevice.device(deviceId);
     final group = utf8.encode(groupId);
-    final files = previewsWithinBudget(media).map((m) => m.toJson()).toList();
-    final payload = {'type': 'text', 'body': text, if (files.isNotEmpty) 'media': files};
+    final text = payload['body'] as String? ?? '';
+    final files = payload['media'] as List?;
     for (var attempt = 0; ; attempt++) {
       final ciphertext = await device.encrypt(group, utf8.encode(jsonEncode(payload)));
       final epoch = await device.epoch(group);
@@ -244,9 +284,9 @@ class E2eChats {
           ciphertext: ciphertext,
           epoch: epoch,
           clientMessageId: clientMessageId,
-          mediaIds: [for (final m in media) m.mediaId],
+          mediaIds: mediaIds,
         );
-        final message = _decryptedMessage(json, text, media: files);
+        final message = _decryptedMessage(json, text, media: files, extra: extrasOf(payload.cast<String, dynamic>()));
         await store.upsertAll([message]);
         return ChatMessage.fromJson(jsonDecode(message.json) as Map<String, dynamic>);
       } on ApiException catch (e) {

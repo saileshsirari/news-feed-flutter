@@ -12,6 +12,8 @@ import 'package:feature_chat/chat/conversation_notifier.dart';
 import 'package:feature_chat/chat/message_info_sheet.dart';
 import 'package:feature_chat/chat/emoji_picking.dart';
 import 'package:feature_chat/chat/message_actions.dart';
+import 'package:feature_chat/location/chat_location.dart';
+import 'package:feature_chat/location/location_widgets.dart';
 
 /// Compose/Android: ≈ a screen composable doing
 /// `val state by vm.state.collectAsState()` with
@@ -225,6 +227,8 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
                     ),
                   ),
           ),
+          // While I'm sharing my live location here: time left, and Stop.
+          LiveShareBanner(conversationId: widget.conversationId),
           SafeArea(
             child: Padding(
               padding: const EdgeInsets.all(8),
@@ -240,6 +244,18 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
                     children: [
                       // Not where this device can't read (or send to) the chat.
                       if (!vm.isE2e || vm.canReadE2e) AddMediaButton(draftKey: _draftKey),
+                      // Your location, live location, or a place (like WhatsApp's).
+                      if (!vm.isE2e || vm.canReadE2e)
+                        IconButton(
+                          tooltip: 'Share location',
+                          icon: const Icon(Icons.location_on_outlined),
+                          onPressed: () => showShareLocationSheet(
+                            context,
+                            ref,
+                            conversationId: widget.conversationId,
+                            isE2e: vm.isE2e,
+                          ),
+                        ),
                       IconButton(
                         tooltip: 'Emoji',
                         icon: const Icon(Icons.emoji_emotions_outlined),
@@ -348,6 +364,19 @@ class _MessageBubble extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    // The end of an encrypted chat's live share: a small note, like a notice.
+    if (ChatLocation.stopOf(message) != null) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 6),
+          child: Text(
+            '📍 ${message.senderUsername} stopped sharing live location',
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(color: colorScheme.onSurfaceVariant),
+          ),
+        ),
+      );
+    }
+    final location = ChatLocation.of(message);
     if (message.isNotice) {
       // About the chat itself ("🔒 End-to-end encryption turned on").
       return Center(
@@ -388,6 +417,11 @@ class _MessageBubble extends StatelessWidget {
                     padding: const EdgeInsets.symmetric(vertical: 4),
                     // Downloaded and decrypted here; tapping works as above.
                     child: SealedMediaGrid(media: message.sealedMedia, linkOf: encryptedFileLink),
+                  ),
+                if (location != null)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    child: ChatLocationBubble(message: message, location: location),
                   ),
                 if (message.body.isNotEmpty) Text(message.body),
                 Align(

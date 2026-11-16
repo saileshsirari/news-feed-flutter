@@ -4,6 +4,7 @@
 /// own [PlaceSearch].
 library;
 
+export 'src/directions.dart';
 export 'src/geo_point.dart';
 export 'src/locale_defaults.dart';
 export 'src/my_location.dart';

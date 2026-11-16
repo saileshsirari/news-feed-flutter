@@ -32,6 +32,7 @@ Future<ChatMessage> sendWithOneRetry(
   required String body,
   required String clientMessageId,
   List<int> mediaIds = const [],
+  Map<String, Object?>? location,
 }) async {
   Future<ChatMessage> attempt() => api.sendMessage(
         conversationId,
@@ -39,6 +40,7 @@ Future<ChatMessage> sendWithOneRetry(
         body: body,
         clientMessageId: clientMessageId,
         mediaIds: mediaIds,
+        location: location,
       );
   try {
     return await attempt();
