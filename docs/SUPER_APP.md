@@ -80,6 +80,23 @@ compiled in as usual: iOS can't download code, and Play Store deferred
 components aren't set up. Chat is global (messages and calls reach you in any
 mini-app), so it loads at start everywhere.
 
+### Where the web app lives
+
+`https://app.150-230-234-113.sslip.io`, served by Caddy on the VM from
+`/var/www/newsfeed-web` (its own block in `/etc/caddy/Caddyfile`; the
+entry files are sent with `no-cache`, so a new build shows on reload). The
+API allows that address (`CORS_ALLOWED_ORIGINS` in `/etc/newsfeed/app.env`),
+and Zitadel's web app has `https://app.150-230-234-113.sslip.io/redirect.html`
+among its redirect URIs. To put a new build there:
+
+```bash
+flutter build web
+cd build/web && COPYFILE_DISABLE=1 tar czf - . | ssh ubuntu@150.230.234.113 'cd /var/www/newsfeed-web && find . -mindepth 1 -delete && tar xzf -'
+```
+
+(The VM has no `rsync`. `localhost:8766`, served from `build/web` on the
+Mac, still works for trying a build before it goes up.)
+
 ## Adding a mini-app (as taxi was)
 
 1. `packages/feature_taxi` with `taxi_info.dart` (a `MiniAppInfo`) and
