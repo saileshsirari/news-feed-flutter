@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:app_core/session/device_registration.dart';
+import 'package:app_core/push/push_setup.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:app_core/app_core.dart';
@@ -78,6 +80,29 @@ void main() {
 
     expect(container.read(currentUserProvider).value, isNull);
     expect(await containerReturning(celebrity).read(currentUserProvider.future), isNull);
+  });
+
+  test('login remembers who\'s signed in for pushes; logout forgets, and unregisters this device\'s pushes', () async {
+    final requests = <String>[];
+    final api = ApiService(
+      config,
+      httpClient: MockClient((request) async {
+        requests.add('${request.method} ${request.url.path}');
+        return http.Response(jsonEncode(celebrity), 200);
+      }),
+    );
+    final container = ProviderContainer.test(
+      overrides: [appConfigProvider.overrideWithValue(config), apiServiceProvider.overrideWithValue(api)],
+    );
+    await container.read(currentUserProvider.future);
+    await container.read(currentUserProvider.notifier).login('celebrity');
+    expect(await isForThisDevice({'to': '7'}), isTrue);
+    expect(await isForThisDevice({'to': '2004'}), isFalse);
+
+    await DeviceIds().save(7, 42); // a registered device (a real sign-in)
+    await container.read(currentUserProvider.notifier).logout();
+    expect(requests, contains('DELETE /push/endpoints/42'));
+    expect(await isForThisDevice({'to': '7'}), isFalse);
   });
 
   test('logout asks each mini-app to clear its user\'s data, even when one fails', () async {

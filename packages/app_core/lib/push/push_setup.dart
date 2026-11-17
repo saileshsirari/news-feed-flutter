@@ -3,6 +3,7 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:oidc_auth/oidc_auth.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../config/app_config.dart';
 import '../mini_app/mini_app.dart';
@@ -41,9 +42,38 @@ Future<void> handlePushInBackground(RemoteMessage push, List<MiniAppSlot> slots)
   await routePush(slots, push.data, appOpen: false);
 }
 
+/// Who's signed in on this device, for pushes: saved where a push in the
+/// background (its own isolate, no providers) can read it.
+const _pushRecipientKey = 'push_recipient_user_id';
+
+/// Remembers that [userId] is the account signed in here (null: none).
+Future<void> setPushRecipient(int? userId) async {
+  final prefs = await SharedPreferences.getInstance();
+  if (userId == null) {
+    await prefs.remove(_pushRecipientKey);
+  } else {
+    await prefs.setInt(_pushRecipientKey, userId);
+  }
+}
+
+/// Whether [data] (a push) is for whoever is signed in here. A push says
+/// whom it's for ("to"); one for another account (this phone signed in as
+/// someone else before, and the server still had it) is dropped rather
+/// than shown to the wrong person. Older servers didn't say: shown.
+Future<bool> isForThisDevice(Map<String, dynamic> data) async {
+  final to = int.tryParse('${data['to'] ?? ''}');
+  if (to == null) return true;
+  return (await SharedPreferences.getInstance()).getInt(_pushRecipientKey) == to;
+}
+
 /// Offers [data] to each mini-app in turn until one shows it, like a
-/// mailroom handing a letter to the right department.
+/// mailroom handing a letter to the right department. A push for an
+/// account that isn't signed in here is dropped (see [isForThisDevice]).
 Future<bool> routePush(List<MiniAppSlot> slots, Map<String, dynamic> data, {required bool appOpen}) async {
+  if (!await isForThisDevice(data)) {
+    debugPrint('[push] dropped: it\'s for another account than the one signed in here');
+    return true;
+  }
   for (final slot in slots) {
     try {
       if (await (await slot.load()).showPush(data, appOpen: appOpen)) return true;

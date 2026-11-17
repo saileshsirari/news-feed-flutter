@@ -79,6 +79,19 @@ class PushRegistration {
     }
   }
 
+  /// [userId] is signing out of this device: the server stops pushing to it
+  /// for them (or their messages would keep arriving here for whoever signs
+  /// in next). Their choice stays on, so signing back in turns it on again.
+  Future<void> unregister(int userId) async {
+    final deviceId = await deviceIds.get(userId);
+    if (deviceId == null) return;
+    try {
+      await api.deletePushEndpoint(deviceId);
+    } on Object catch (e) {
+      debugPrint('[push] couldn\'t unregister on sign-out: $e');
+    }
+  }
+
   /// On every start: if notifications are on, re-send this device's address.
   Future<void> refresh(int userId) async {
     if (!await isOn(userId)) return;

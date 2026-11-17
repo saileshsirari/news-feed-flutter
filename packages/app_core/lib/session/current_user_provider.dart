@@ -5,6 +5,8 @@ import 'package:app_core/data/services/api_service.dart';
 import 'package:app_core/data/services/service_providers.dart';
 import 'package:app_core/mini_app/registry.dart';
 import 'package:app_core/models/models.dart';
+import 'package:app_core/push/push_registration.dart';
+import 'package:app_core/push/push_setup.dart' show setPushRecipient;
 import 'package:app_core/session/device_registration.dart';
 import 'package:app_core/session/user_session.dart';
 
@@ -46,6 +48,7 @@ class CurrentUserNotifier extends AsyncNotifier<CurrentUser?> {
       try {
         final me = _fromUser(await ref.watch(apiServiceProvider).getMe());
         unawaited(ref.read(deviceRegistrarProvider)(me.id)); // refreshes "last seen"
+        unawaited(setPushRecipient(me.id));
         return me;
       } on ApiException catch (e) {
         if (e.statusCode != 401) rethrow;
@@ -54,7 +57,9 @@ class CurrentUserNotifier extends AsyncNotifier<CurrentUser?> {
         return null;
       }
     }
-    return ref.watch(userSessionProvider).current();
+    final saved = await ref.watch(userSessionProvider).current();
+    unawaited(setPushRecipient(saved?.id));
+    return saved;
   }
 
   /// Signs in through Zitadel's page (the system browser). Throws if the
@@ -67,6 +72,7 @@ class CurrentUserNotifier extends AsyncNotifier<CurrentUser?> {
     try {
       final me = _fromUser(await ref.read(apiServiceProvider).getMe());
       state = AsyncData(me);
+      unawaited(setPushRecipient(me.id));
       unawaited(ref.read(deviceRegistrarProvider)(me.id));
     } on Object {
       await auth.signOut(); // Don't keep tokens for a sign-in that didn't work.
@@ -80,6 +86,7 @@ class CurrentUserNotifier extends AsyncNotifier<CurrentUser?> {
   Future<void> login(String username) async {
     final user = await ref.read(apiServiceProvider).getUserByUsername(username);
     await ref.read(userSessionProvider).save(user);
+    await setPushRecipient(user.id);
     state = AsyncData(_fromUser(user));
   }
 
@@ -96,7 +103,16 @@ class CurrentUserNotifier extends AsyncNotifier<CurrentUser?> {
           // Still log out; what's left is per user, so nobody else reads it.
         }
       }
+      // This device stops getting their pushes (while still signed in, so
+      // the server accepts the request). Before, signing out left them
+      // registered, and the next person signed in here got their messages.
+      await ref
+          .read(pushRegistrationProvider)
+          .unregister(userId)
+          .timeout(const Duration(seconds: 5))
+          .catchError((Object _) {});
     }
+    await setPushRecipient(null);
     await ref.read(authSessionProvider)?.signOut();
     await ref.read(userSessionProvider).clear();
     state = const AsyncData(null);
@@ -110,6 +126,4 @@ class CurrentUserNotifier extends AsyncNotifier<CurrentUser?> {
 ///   - `ref.watch(currentUserProvider)`                 ≈ `vm.user.collectAsState()`
 ///   - `ref.read(currentUserProvider.notifier).login()` ≈ `vm.login()`
 ///   - the provider itself                               ≈ `viewModel<SessionViewModel>()`'s key
-final currentUserProvider = AsyncNotifierProvider<CurrentUserNotifier, CurrentUser?>(
-  CurrentUserNotifier.new,
-);
+final currentUserProvider = AsyncNotifierProvider<CurrentUserNotifier, CurrentUser?>(CurrentUserNotifier.new);
