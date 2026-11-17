@@ -46,7 +46,9 @@ class CurrentUserNotifier extends AsyncNotifier<CurrentUser?> {
     final auth = ref.watch(authSessionProvider);
     if (auth != null && await auth.isSignedIn) {
       try {
-        final me = _fromUser(await ref.watch(apiServiceProvider).getMe());
+        // The account's API (no organisation): switching organisation
+        // rebuilds the org's API client, and mustn't sign anyone out and in.
+        final me = _fromUser(await ref.watch(accountApiServiceProvider).getMe());
         unawaited(ref.read(deviceRegistrarProvider)(me.id)); // refreshes "last seen"
         unawaited(setPushRecipient(me.id));
         return me;

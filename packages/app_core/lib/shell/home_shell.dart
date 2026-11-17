@@ -7,6 +7,8 @@ import '../inbox/inbox.dart';
 import '../mini_app/app_links.dart';
 import '../mini_app/mini_app.dart';
 import '../mini_app/registry.dart';
+import '../orgs/org_switcher.dart';
+import '../orgs/orgs_controller.dart';
 import '../push/local_notifications.dart';
 import '../session/current_user_provider.dart';
 import '../settings/settings_screen.dart';
@@ -40,7 +42,11 @@ class _HomeShellState extends ConsumerState<HomeShell> {
     );
   }
 
-  void _open(Uri link) {
+  /// Opens a tapped notification's link; one about another organisation
+  /// (`org=` in it) switches there first, so what it opens is in view.
+  Future<void> _open(Uri link) async {
+    final orgId = int.tryParse(link.queryParameters['org'] ?? '');
+    if (orgId != null) await ref.read(orgsProvider.notifier).switchTo(orgId);
     if (mounted) openAppLink(context, link);
   }
 
@@ -61,7 +67,8 @@ class _HomeShellState extends ConsumerState<HomeShell> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.title),
+        // The organisation shown (tap to switch, join or invite), like a Slack workspace's name.
+        title: OrgTitle(fallback: widget.title),
         actions: [
           for (final slot in chat)
             IconButton(

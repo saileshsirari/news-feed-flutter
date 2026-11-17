@@ -51,7 +51,8 @@ knows about one:
 
 A tile shows when the mini-app is **compiled in** (listed in
 `lib/mini_apps.dart`) **and on at the server** (`GET /config/apps`, from the
-server's `ENABLED_MODULES`). If the server can't be asked (offline, or an
+server's `ENABLED_MODULES` and the organisation's own switches; see
+Organisations below). If the server can't be asked (offline, or an
 older server), every compiled-in mini-app shows.
 
 The same answer carries the map settings (tile URL and credit line, whether
@@ -93,6 +94,30 @@ Taxi itself (rides, live tracking, driver mode) is described in the
 server's `docs/TAXI.md`. It listens on the shared socket with
 `AppSocket.watch(...)`, the general form of `watchPost` (counted, and sent
 again after a reconnect).
+
+## Organisations
+
+Like Slack workspaces: a business client gets its own organisation, and its
+people see only its posts, chats, communities and rides. Everyone is in at
+least one; "Beautiful Apps" is the open, everyone's one. The server keeps
+them apart (see the server's `docs/ORGANISATIONS.md`); the app only says
+which one it's showing.
+
+```
+  Home (Acme Taxis ▾) ──── X-Org: 5 ────▶ server
+```
+
+* `app_core/lib/orgs`: `orgsProvider` (my orgs and the one shown,
+  remembered per account), the switcher (`OrgTitle` at the top of Home),
+  joining with an invite link, and invite links for owners and admins.
+* `apiHttpClientProvider` adds `X-Org` and watches the org shown, so
+  switching reloads everything built on the API by itself: the Home grid
+  (each org has its own mini-apps), each mini-app's data, the socket
+  (`?org=`). Mini-apps don't know about organisations at all.
+* Sign-in and "my orgs" use `accountHttpClientProvider` (no org), so
+  switching never signs anyone out and in.
+* A push says which org it's about; tapping it switches there first.
+* An older server (no `/orgs`): no switcher, no header, as before.
 
 ## Region and units
 

@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:app_core/data/services/app_socket.dart';
 import 'package:app_core/data/services/service_providers.dart';
+import 'package:app_core/orgs/orgs_controller.dart';
 
 /// The one realtime connection for a logged-in user, shared by the feed, the
 /// chat screens and HomeScreen's incoming-call banner.
@@ -28,6 +29,8 @@ final socketProvider = Provider.autoDispose.family<AppSocket, int>((ref, userId)
     userId,
     ref.watch(appConfigProvider),
     accessToken: ref.watch(authSessionProvider)?.accessToken,
+    // Switching organisation reconnects, for the new one.
+    orgId: ref.watch(currentOrgIdProvider),
   )..connect();
   ref.onDispose(socket.disconnect);
   return socket;

@@ -33,6 +33,17 @@ var _ready = false;
 final _taps = StreamController<Uri>.broadcast();
 final _shown = StreamController<ShownNotification>.broadcast();
 
+/// Zone key for the organisation a push being shown is about (see routePush).
+const pushOrgKey = #pushOrg;
+
+/// [link] with the organisation the push being shown is about, as `org=`:
+/// tapping it switches the app to that organisation first (see HomeShell).
+Uri? withPushOrg(Uri? link) {
+  final orgId = Zone.current[pushOrgKey];
+  if (link == null || orgId is! int || link.queryParameters.containsKey('org')) return link;
+  return link.replace(queryParameters: {...link.queryParameters, 'org': '$orgId'});
+}
+
 /// Tapped notifications' links, while the app is running.
 Stream<Uri> get notificationTaps => _taps.stream;
 
@@ -87,6 +98,7 @@ Future<void> showLocalNotification({
   required NotificationChannel channel,
   Uri? link,
 }) async {
+  link = withPushOrg(link);
   await _ensureReady();
   await _plugin.show(
     id: id,

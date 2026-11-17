@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
@@ -6,6 +8,7 @@ import 'package:oidc_auth/oidc_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../config/app_config.dart';
+import 'local_notifications.dart' show pushOrgKey;
 import '../mini_app/mini_app.dart';
 
 /// Starts Firebase on Android and iOS, so FcmChannel can work, and hands
@@ -74,14 +77,20 @@ Future<bool> routePush(List<MiniAppSlot> slots, Map<String, dynamic> data, {requ
     debugPrint('[push] dropped: it\'s for another account than the one signed in here');
     return true;
   }
-  for (final slot in slots) {
-    try {
-      if (await (await slot.load()).showPush(data, appOpen: appOpen)) return true;
-    } on Object catch (e) {
-      debugPrint('[push] ${slot.info.id} couldn\'t show a push: $e');
+  // Which organisation it's about rides along with the push while a
+  // mini-app shows it (like a label on the letter), so the notification's
+  // link says it and tapping it switches there first (see showLocalNotification).
+  final orgId = int.tryParse('${data['orgId'] ?? ''}');
+  return runZoned(() async {
+    for (final slot in slots) {
+      try {
+        if (await (await slot.load()).showPush(data, appOpen: appOpen)) return true;
+      } on Object catch (e) {
+        debugPrint('[push] ${slot.info.id} couldn\'t show a push: $e');
+      }
     }
-  }
-  return false;
+    return false;
+  }, zoneValues: {pushOrgKey: orgId});
 }
 
 /// The saved sign-in's server and HTTP client, for code running outside

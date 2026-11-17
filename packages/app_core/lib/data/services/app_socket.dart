@@ -40,7 +40,11 @@ class AppSocket {
   /// [accessToken] gives the signed-in user's token (asked again on every
   /// reconnect, so it's always a fresh one); without it, or when it gives
   /// null, the socket connects as a test account, by user id only.
-  AppSocket(this.userId, this._config, {this.accessToken});
+  AppSocket(this.userId, this._config, {this.accessToken, this.orgId});
+
+  /// The organisation the app is showing: the socket's own messages
+  /// (watching a post's comments, a ride) are about that org.
+  final int? orgId;
 
   final Future<String?> Function()? accessToken;
 
@@ -137,7 +141,10 @@ class AppSocket {
     // Same host as the REST API, from the one AppConfig — the whole reason
     // "can't log in on a real phone" happened was the address living in two
     // places and only one getting updated.
-    final channel = WebSocketChannel.connect(_config.webSocketUri(userId: userId), protocols: protocols);
+    final channel = WebSocketChannel.connect(
+      _config.webSocketUri(userId: userId, orgId: orgId),
+      protocols: protocols,
+    );
     _channel = channel;
     channel.ready.then(
       (_) {

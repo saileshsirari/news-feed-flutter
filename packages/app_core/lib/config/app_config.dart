@@ -20,14 +20,11 @@ class AppConfig {
   const AppConfig({required this.apiBaseUrl, this.oidc});
 
   factory AppConfig.fromEnvironment() => AppConfig(
-        apiBaseUrl: Uri.parse(
-          const String.fromEnvironment(
-            'API_BASE_URL',
-            defaultValue: 'https://150-230-234-113.sslip.io',
-          ),
-        ),
-        oidc: _zitadel(),
-      );
+    apiBaseUrl: Uri.parse(
+      const String.fromEnvironment('API_BASE_URL', defaultValue: 'https://150-230-234-113.sslip.io'),
+    ),
+    oidc: _zitadel(),
+  );
 
   final Uri apiBaseUrl;
 
@@ -61,6 +58,10 @@ class AppConfig {
         'offline_access',
         // Puts the project id in the access token's audience.
         'urn:zitadel:iam:org:project:id:$projectId:aud',
+        // Puts the user's own Zitadel organisation in the token
+        // (urn:zitadel:iam:user:resourceowner:id): a company with its own
+        // login in Zitadel gets its people into its organisation here.
+        'urn:zitadel:iam:user:resourceowner',
       ],
       // Always show the account picker, so signing out and in again can
       // switch accounts instead of silently reusing the last one.
@@ -70,9 +71,10 @@ class AppConfig {
 
   /// The realtime socket lives on the same host. ws/wss must follow
   /// http/https: behind Caddy's TLS termination a plain ws:// fails.
-  Uri webSocketUri({required int userId}) => apiBaseUrl.replace(
-        scheme: apiBaseUrl.scheme == 'https' ? 'wss' : 'ws',
-        path: '/ws',
-        queryParameters: {'userId': '$userId'},
-      );
+  /// [orgId]: the organisation the app is showing (as X-Org is for requests).
+  Uri webSocketUri({required int userId, int? orgId}) => apiBaseUrl.replace(
+    scheme: apiBaseUrl.scheme == 'https' ? 'wss' : 'ws',
+    path: '/ws',
+    queryParameters: {'userId': '$userId', if (orgId != null) 'org': '$orgId'},
+  );
 }

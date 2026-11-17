@@ -16,7 +16,6 @@ import 'package:app_core/session/current_user_provider.dart';
 import 'package:oidc_auth/oidc_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -106,14 +105,19 @@ void main() {
   });
 
   test('logout asks each mini-app to clear its user\'s data, even when one fails', () async {
-    final api = ApiService(config, httpClient: MockClient((request) async => http.Response(jsonEncode(celebrity), 200)));
+    final api = ApiService(
+      config,
+      httpClient: MockClient((request) async => http.Response(jsonEncode(celebrity), 200)),
+    );
     final good = _RecordingMiniApp('good');
     final failing = _RecordingMiniApp('failing', fail: true);
-    final container = ProviderContainer.test(overrides: [
-      appConfigProvider.overrideWithValue(config),
-      apiServiceProvider.overrideWithValue(api),
-      miniAppSlotsProvider.overrideWithValue([MiniAppSlot.eager(failing), MiniAppSlot.eager(good)]),
-    ]);
+    final container = ProviderContainer.test(
+      overrides: [
+        appConfigProvider.overrideWithValue(config),
+        apiServiceProvider.overrideWithValue(api),
+        miniAppSlotsProvider.overrideWithValue([MiniAppSlot.eager(failing), MiniAppSlot.eager(good)]),
+      ],
+    );
     await container.read(currentUserProvider.future);
     await container.read(currentUserProvider.notifier).login('celebrity');
 
@@ -165,16 +169,21 @@ void main() {
       store: store,
     );
 
-    ProviderContainer containerWith(AuthSession auth, http.Response Function(http.Request) server) =>
-        ProviderContainer.test(
-          overrides: [
-            appConfigProvider.overrideWithValue(config),
-            authSessionProvider.overrideWithValue(auth),
-            apiServiceProvider.overrideWithValue(
-              ApiService(config, httpClient: AuthorizedClient(auth.accessToken, MockClient((r) async => server(r)))),
-            ),
-          ],
-        );
+    ProviderContainer containerWith(AuthSession auth, http.Response Function(http.Request) server) {
+      final api = ApiService(
+        config,
+        httpClient: AuthorizedClient(auth.accessToken, MockClient((r) async => server(r))),
+      );
+      return ProviderContainer.test(
+        overrides: [
+          appConfigProvider.overrideWithValue(config),
+          authSessionProvider.overrideWithValue(auth),
+          apiServiceProvider.overrideWithValue(api),
+          // Restoring a sign-in asks who we are without an organisation.
+          accountApiServiceProvider.overrideWithValue(api),
+        ],
+      );
+    }
 
     TokenSet saved() => TokenSet(
       accessToken: 'token-1',
